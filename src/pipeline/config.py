@@ -65,6 +65,11 @@ class PathsConfig:
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         return os.path.join(project_root, "classification_analysis.csv")
 
+    @property
+    def trained_model_path(self) -> str:
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        return os.path.join(project_root, "final_quality_classifier_model.pkl")
+
 
 @dataclass
 class LightenerConfig:

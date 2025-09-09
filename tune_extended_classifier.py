@@ -9,7 +9,10 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier,
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import cross_val_score, GridSearchCV
+from sklearn.model_selection import cross_val_score, GridSearchCV, StratifiedKFold
+from sklearn.pipeline import Pipeline
+import joblib
+from src.pipeline.config import PipelineConfig
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -18,7 +21,8 @@ def main():
 
     print("Загружаем расширенные данные...")
     try:
-        df = pd.read_csv('/Users/elinacertova/PycharmProjects/documents_preprocessing/classification_analysis.csv')
+        cfg = PipelineConfig()
+        df = pd.read_csv(cfg.paths.training_csv_path)
         print(f"✓ Загружено {len(df)} записей")
     except FileNotFoundError:
         print("✗ Файл classification_analysis.csv не найден. Сначала запустите create_training_data.py")
@@ -66,8 +70,8 @@ def main():
     for i, col in enumerate(feature_cols):
         print(f"  {i+1:2d}. {col}")
 
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    # Настраиваем воспроизводимый разбиение
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     
     print(f"\nРазмер данных: {X.shape}")
     print(f"Распределение классов: {y.value_counts().to_dict()}")
@@ -137,7 +141,7 @@ def main():
     
     for i, params in enumerate(rf_params):
         rf = RandomForestClassifier(random_state=42, **params)
-        cv_scores = cross_val_score(rf, X, y, cv=5)
+        cv_scores = cross_val_score(rf, X, y, cv=skf)
         cv_mean = cv_scores.mean()
         print(f"  RF {i+1}: {cv_mean:.4f} ± {cv_scores.std():.4f}")
         
@@ -155,7 +159,7 @@ def main():
     
     for i, params in enumerate(gb_params):
         gb = GradientBoostingClassifier(random_state=42, **params)
-        cv_scores = cross_val_score(gb, X, y, cv=5)
+        cv_scores = cross_val_score(gb, X, y, cv=skf)
         cv_mean = cv_scores.mean()
         print(f"  GB {i+1}: {cv_mean:.4f} ± {cv_scores.std():.4f}")
         
@@ -173,25 +177,31 @@ def main():
     ]
     
     for i, params in enumerate(lr_params):
-        lr = LogisticRegression(random_state=42, max_iter=1000, **params)
-        cv_scores = cross_val_score(lr, X_scaled, y, cv=5)
+        lr_pipeline = Pipeline([
+            ('scaler', StandardScaler()),
+            ('clf', LogisticRegression(random_state=42, max_iter=1000, **params))
+        ])
+        cv_scores = cross_val_score(lr_pipeline, X, y, cv=skf)
         cv_mean = cv_scores.mean()
         print(f"  LR {i+1}: {cv_mean:.4f} ± {cv_scores.std():.4f}")
         
         if cv_mean > best_ml_acc:
             best_ml_acc = cv_mean
-            best_ml_model = lr
+            best_ml_model = lr_pipeline
             best_ml_name = f"Logistic Regression {i+1}"
 
     print("Тестируем SVM...")
-    svm = SVC(kernel='rbf', random_state=42, probability=True)
-    cv_scores = cross_val_score(svm, X_scaled, y, cv=5)
+    svm_pipeline = Pipeline([
+        ('scaler', StandardScaler()),
+        ('clf', SVC(kernel='rbf', random_state=42, probability=True))
+    ])
+    cv_scores = cross_val_score(svm_pipeline, X, y, cv=skf)
     cv_mean = cv_scores.mean()
     print(f"  SVM: {cv_mean:.4f} ± {cv_scores.std():.4f}")
     
     if cv_mean > best_ml_acc:
         best_ml_acc = cv_mean
-        best_ml_model = svm
+        best_ml_model = svm_pipeline
         best_ml_name = "SVM"
 
     print("Тестируем Voting Classifier...")
@@ -199,13 +209,13 @@ def main():
         estimators=[
             ('rf', RandomForestClassifier(n_estimators=50, max_depth=5, random_state=42)),
             ('gb', GradientBoostingClassifier(n_estimators=50, random_state=42)),
-            ('lr', LogisticRegression(random_state=42, max_iter=1000)),
-            ('svm', SVC(kernel='rbf', random_state=42, probability=True))
+            ('lr', Pipeline([('scaler', StandardScaler()), ('clf', LogisticRegression(random_state=42, max_iter=1000))])),
+            ('svm', Pipeline([('scaler', StandardScaler()), ('clf', SVC(kernel='rbf', random_state=42, probability=True))]))
         ],
         voting='soft'
     )
     
-    cv_scores = cross_val_score(voting_clf, X_scaled, y, cv=5)
+    cv_scores = cross_val_score(voting_clf, X, y, cv=skf)
     cv_mean = cv_scores.mean()
     print(f"  Voting: {cv_mean:.4f} ± {cv_scores.std():.4f}")
     
@@ -239,12 +249,9 @@ def main():
     print(f"\n=== 5. ДЕТАЛЬНЫЙ АНАЛИЗ ЛУЧШЕГО МЕТОДА ===")
     
     if best_method == "ML":
-        if 'Voting' in best_ml_name:
-            best_ml_model.fit(X_scaled, y)
-            y_pred = best_ml_model.predict(X_scaled)
-        else:
-            best_ml_model.fit(X, y)
-            y_pred = best_ml_model.predict(X)
+        # Обучаем лучший пайплайн/модель на всех данных X
+        best_ml_model.fit(X, y)
+        y_pred = best_ml_model.predict(X)
         
         print("Классификационный отчет:")
         print(classification_report(y, y_pred, target_names=['failed', 'medium', 'good']))
@@ -255,7 +262,19 @@ def main():
         
         print("Классификационный отчет:")
         print(classification_report(y, df['pred_best'], target_names=['failed', 'medium', 'good']))
-    
+
+    if best_method == "ML" and best_ml_model is not None:
+        print("\n=== 6. ОБУЧЕНИЕ ФИНАЛЬНОЙ МОДЕЛИ И СОХРАНЕНИЕ ===")
+        best_ml_model.fit(X, y)
+        model_path = cfg.paths.trained_model_path
+        joblib.dump({
+            'model': best_ml_model,
+            'features': feature_cols,
+        }, model_path)
+        print(f"✓ Модель сохранена в {model_path}")
+    else:
+        print("\n=== 6. ЛУЧШИЙ МЕТОД — ПОРОГОВЫЙ. МОДЕЛЬ НЕ СОХРАНЯЕТСЯ ===")
+
     print(f"\n=== ЗАВЕРШЕНО ===")
     print(f"Лучший метод: {best_method}")
     print(f"Итоговая точность: {best_accuracy:.4f}")
