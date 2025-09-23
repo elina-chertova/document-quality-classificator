@@ -1,10 +1,3 @@
-"""
-Логика шагов обработки вынесена из main.py:
-- классификация (и раскладывание по папкам)
-- копирование нормальных
-- осветление тёмных
-"""
-
 import os
 from typing import List, Dict, Any
 
@@ -58,5 +51,9 @@ def lighten_dark_documents(
         passes=passes,
     )
     return results
+
+
+
+
 
 

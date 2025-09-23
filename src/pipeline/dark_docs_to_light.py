@@ -29,7 +29,8 @@ def dark_documents_to_light():
         lighten_params=cfg.lightener.params,
     )
 
-    input_folder = cfg.paths.input_folder
+    # После шага удаления линий используем очищенную папку как вход
+    input_folder = cfg.paths.lines_cleaned_folder
     output_folder = cfg.paths.output_folder
     dark_folder = cfg.paths.dark_folder
     

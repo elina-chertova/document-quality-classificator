@@ -54,6 +54,22 @@ class PathsConfig:
     def dark_folder(self) -> str:
         return os.path.join(self.root_dir, "results", "dark")
 
+    @property
+    def lines_cleaned_folder(self) -> str:
+        return os.path.join(self.root_dir, "results", "no_lines")
+
+    @property
+    def no_lines_ok_folder(self) -> str:
+        return os.path.join(self.root_dir, "results", "no_lines_ok")
+
+    # OCR
+    @property
+    def ocr_output_folder(self) -> str:
+        return os.path.join(self.root_dir, "results", "ocr")
+    @property
+    def ocr_csv_path(self) -> str:
+        return os.path.join(self.ocr_output_folder, "ocr_results.csv")
+
     # Примеры качества и путь к обучающему CSV
     @property
     def example_quality_base(self) -> str:

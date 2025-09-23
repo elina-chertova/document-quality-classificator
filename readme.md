@@ -3,6 +3,54 @@
 pip install -r requirements.txt
 ```
 
+
+
+## OCR и улучшение качества
+
+### OCR (Surya)
+```python
+from src.pipeline.ocr_runner import run_ocr
+run_ocr(root_dir="/Users/elinacertova/Downloads/documents_dataset")
+```
+
+### OCR (VLLM/Qwen, первая страница → txt)
+```python
+from src.pipeline.vllm_ocr_runner import run_vllm_ocr
+run_vllm_ocr(root_dir="/Users/elinacertova/Downloads/documents_dataset")
+```
+
+### Дополнительные методы улучшения текста
+
+```python
+
+from src.pipeline.quality_improvements_runner import improve_dataset
+improve_dataset(mode="ocrmypdf", root_dir="/Users/elinacertova/Downloads/documents_dataset")
+improve_dataset(mode="scantailor_then_ocr", root_dir="/Users/elinacertova/Downloads/documents_dataset")  # пока не работает
+improve_dataset(mode="unpaper_tesseract", root_dir="/Users/elinacertova/Downloads/documents_dataset")  # пока не работает
+```
+
+
+### Подсчёт CER
+```python
+from src.pipeline.cer_runner import run_cer
+run_cer(
+    hyp_dir="/path/to/hyp_txt",   # распознанные тексты
+    ref_dir="/path/to/ref_txt",   # эталоны (.txt) с теми же именами
+    csv_out="/path/to/cer_results.csv",
+)
+```
+
+### Перебор параметров и CER (quality sweep) - пока не тестировать
+```python
+from src.pipeline.quality_sweep import run_quality_sweep
+run_quality_sweep(
+    input_dir="/path/to/input_pdfs",    # папка с PDF
+    refs_dir="/path/to/refs_txt",      # эталонные .txt с теми же именами
+    root_dir="/Users/elinacertova/Downloads/documents_dataset",
+)
+```
+Результаты: `…/results/sweep/ocrmypdf_*`, для каждой комбинации создаётся `cer.csv` и выводится сводка в stdout.
+
 ### Ключевые файлы и точки входа
 
 - Конфигурация путей/параметров: `src/pipeline/config.py`

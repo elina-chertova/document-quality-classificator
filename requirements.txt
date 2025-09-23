@@ -7,3 +7,9 @@ numpy
 pdf2image
 pandas
 scikit-learn
+requests
+openai
+ocrmypdf
+img2pdf
+pypdf
+python-dotenv
