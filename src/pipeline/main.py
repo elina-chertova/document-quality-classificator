@@ -16,11 +16,11 @@ def main(root_dir: str | None = None, full_dateset_dir: str | None = None):
     cfg = PipelineConfig()
     if root_dir:
         cfg.paths.root_dir = root_dir
-    split_pages(root_dir=cfg.paths.root_dir, full_dateset_dir=full_dateset_dir)
-    rotate_right(root_dir=cfg.paths.root_dir)
+    # split_pages(root_dir=cfg.paths.root_dir, full_dateset_dir=full_dateset_dir)
+    # rotate_right(root_dir=cfg.paths.root_dir)
     deskew_documents(root_dir=cfg.paths.root_dir)
-    remove_lines(root_dir=cfg.paths.root_dir, log_csv=None)
-    dark_documents_to_light()
+    # remove_lines(root_dir=cfg.paths.root_dir, log_csv=None)
+    # dark_documents_to_light()
 
 
 

@@ -14,3 +14,5 @@ run_cer(
     ref_dir="/Users/elinacertova/Downloads/documents_dataset/results/ocr_labeled_pdf_true",   # эталоны с теми же именами файлов
     csv_out="cer_results.csv"
 )
+
+

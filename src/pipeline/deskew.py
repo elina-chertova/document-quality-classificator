@@ -7,7 +7,7 @@ def deskew_documents(root_dir: str = "/Users/elinacertova/Downloads/documents_da
     cfg = PipelineConfig()
     if root_dir:
         cfg.paths.root_dir = root_dir
-    params = PDFDeskewParams(dpi=300, angle_limit=35.0, jpeg_quality=85)
+    params = PDFDeskewParams(dpi=400, angle_limit=35.0, jpeg_quality=85)
     deskewer = PDFDeskewer(params)
     input_folder = cfg.paths.rotated_folder
     output_folder = cfg.paths.deskewed_folder

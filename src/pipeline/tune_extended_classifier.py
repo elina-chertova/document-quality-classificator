@@ -237,14 +237,21 @@ def main():
         best_method = "Threshold"
         best_accuracy = best_thresh_acc
 
-    if best_ml_model and hasattr(best_ml_model, 'feature_importances_'):
-        print(f"\n=== 4. ВАЖНОСТЬ ПРИЗНАКОВ ({best_ml_name}) ===")
-        importances = best_ml_model.feature_importances_
-        feature_importance = list(zip(feature_cols, importances))
-        feature_importance.sort(key=lambda x: x[1], reverse=True)
-        
-        for i, (feature, importance) in enumerate(feature_importance[:10]):
-            print(f"  {i+1:2d}. {feature}: {importance:.4f}")
+    # Проверяем наличие модели перед использованием len()
+    if best_ml_model is not None:
+        try:
+            # Пробуем получить feature_importances_
+            if hasattr(best_ml_model, 'feature_importances_'):
+                print(f"\n=== 4. ВАЖНОСТЬ ПРИЗНАКОВ ({best_ml_name}) ===")
+                importances = best_ml_model.feature_importances_
+                feature_importance = list(zip(feature_cols, importances))
+                feature_importance.sort(key=lambda x: x[1], reverse=True)
+                
+                for i, (feature, importance) in enumerate(feature_importance[:10]):
+                    print(f"  {i+1:2d}. {feature}: {importance:.4f}")
+        except AttributeError:
+            # Модель не полностью инициализирована, пропускаем
+            pass
 
     print(f"\n=== 5. ДЕТАЛЬНЫЙ АНАЛИЗ ЛУЧШЕГО МЕТОДА ===")
     

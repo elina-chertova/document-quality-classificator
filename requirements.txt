@@ -1,7 +1,6 @@
 PyPDF2
 Pillow
 pymupdf
-pytesseract
 opencv-python
 numpy
 pdf2image
@@ -13,3 +12,6 @@ ocrmypdf
 img2pdf
 pypdf
 python-dotenv
+paddlepaddle
+paddleocr
+easyocr

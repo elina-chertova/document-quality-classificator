@@ -71,7 +71,7 @@ def predict_quality_for_pdf(pdf_path: str, model_path: str | None = None) -> Dic
     feature_order: List[str] = obj['features']
 
     assessor = ExtendedPDFQualityAssessor(
-        dpi=200,
+        dpi=400,
         copy_to_dirs=False,
         max_workers=1,
     )

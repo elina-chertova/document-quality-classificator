@@ -55,3 +55,5 @@ def cer_for_folders(hyp_dir: str, ref_dir: str, csv_out: str) -> Dict[str, float
     return per_file
 
 
+
+

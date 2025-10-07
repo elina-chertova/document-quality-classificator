@@ -101,7 +101,7 @@ python -m src.pipeline.main
 from src.methods.classificator.classificator import PDFQualityAssessor
 
 assessor = PDFQualityAssessor(
-    dpi=200,
+    dpi=400,
     copy_to_dirs=True,
     max_workers=4,
 )
@@ -143,3 +143,9 @@ python tune_extended_classifier.py
 ```yaml
 python src/pipeline/inference.py
 ```
+
+### Сравнение pytesseract и Surya
+```bash
+python -m src.compare_ocr_backends
+```
+Результат: создаются подпапки `tesseract/` и `surya/` c TXT, и `compare.csv` с длинами текстов и CER (если указаны эталоны).

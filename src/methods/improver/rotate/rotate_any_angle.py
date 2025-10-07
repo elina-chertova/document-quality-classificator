@@ -12,7 +12,7 @@ from typing import List
 
 @dataclass
 class PDFDeskewParams:
-    dpi: int = 300
+    dpi: int = 400
     angle_limit: float = 35.0
     jpeg_quality: int = 85
     keep_size: bool = False
@@ -180,6 +180,11 @@ class PDFDeskewer:
     def process_folder(self, input_folder: str, output_folder: str, failed_folder: str) -> None:
         os.makedirs(output_folder, exist_ok=True)
         os.makedirs(failed_folder, exist_ok=True)
+
+        # Проверяем, что входная папка существует
+        if not os.path.exists(input_folder):
+            self._log.error("Input folder does not exist: %s", input_folder)
+            return
 
         files = [f for f in os.listdir(input_folder) if f.lower().endswith('.pdf')]
         total = len(files)

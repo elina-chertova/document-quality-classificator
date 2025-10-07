@@ -30,7 +30,7 @@ class DarkDocumentClassifier:
 
     def __init__(
         self,
-        dpi: int = 200,
+        dpi: int = 400,
         brightness_threshold: float = 80.0,
         dark_pixels_threshold: float = 30.0,
         contrast_threshold: float = 15.0,

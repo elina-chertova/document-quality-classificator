@@ -199,7 +199,7 @@ def process_folder(input_dir: str, output_dir: str, params: LightenParams = Ligh
 class PDFDocumentLightener:
     def __init__(
         self,
-        dpi: int = 200,
+        dpi: int = 400,
         lighten_params: Optional[object] = None,
         on_log: Optional[callable] = None
     ):

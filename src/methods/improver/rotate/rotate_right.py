@@ -12,9 +12,12 @@
 import os
 import shutil
 import fitz
-import pytesseract
+import numpy as np
 from PIL import Image
 from io import BytesIO
+
+# Импортируем PaddleOCR модули
+from paddleocr import PaddleOCR, DocImgOrientationClassification
 
 
 class RightAngleRotation:
@@ -30,32 +33,128 @@ class RightAngleRotation:
         self.lang = lang
         self.dpi = dpi
         self.rotation_mode = rotation_mode.lower()
+        
+        # Инициализируем модуль классификации ориентации документа
+        self.orientation_classifier = None
+        self.ocr = None
+        try:
+            # Инициализируем классификатор ориентации документа
+            self.orientation_classifier = DocImgOrientationClassification(
+                model_name="PP-LCNet_x1_0_doc_ori",
+                device="cpu"  # Используем CPU для избежания проблем с GPU
+            )
+            
+            # Инициализируем базовый OCR для определения confidence
+            paddle_lang = "ch" if "rus" in lang.lower() else "en"
+            self.ocr = PaddleOCR(
+                lang=paddle_lang,
+                use_textline_orientation=False,
+                use_doc_orientation_classify=False,
+                use_doc_unwarping=False
+            )
+            print("[INFO] Используем DocImgOrientationClassification для определения ориентации")
+        except Exception as e:
+            print(f"[ERROR] Не удалось инициализировать PaddleOCR модули: {e}")
+            print("[WARNING] Будет использоваться упрощенная логика без OCR")
+            self.orientation_classifier = None
+            self.ocr = None
 
     def detect_page_rotation(self, page_image):
+        if self.orientation_classifier is None:
+            print("[INFO] DocImgOrientationClassification недоступен, пропускаем определение поворота")
+            return 0
+        
         try:
-            osd = pytesseract.image_to_osd(page_image)
-            for line in osd.split("\n"):
-                if "Rotate" in line:
-                    return int(line.split(":")[-1].strip())
+            return self._detect_rotation_doc_orientation(page_image)
         except Exception as e:
-            print(f"[WARNING] OSD detection failed: {e}")
+            print(f"[WARNING] DocImgOrientationClassification failed: {e}")
             return None
-        return 0
+    
+    def _detect_rotation_doc_orientation(self, page_image):
+        """Определение поворота с помощью DocImgOrientationClassification"""
+        try:
+            # Конвертируем PIL Image в numpy array
+            if isinstance(page_image, Image.Image):
+                img_array = np.array(page_image)
+            else:
+                img_array = page_image
+            
+            # Используем DocImgOrientationClassification для определения ориентации
+            results = self.orientation_classifier.predict(img_array, batch_size=1)
+            
+            if results and len(results) > 0:
+                result = results[0]
+                json_result = result.json
+                
+                if 'res' in json_result:
+                    class_ids = json_result['res'].get('class_ids', [])
+                    scores = json_result['res'].get('scores', [])
+                    
+                    if len(class_ids) > 0 and len(scores) > 0:
+                        class_id = class_ids[0]
+                        confidence = scores[0]
+                        
+                        # class_id: 0=0°, 1=90°, 2=180°, 3=270°
+                        # Преобразуем в углы поворота для коррекции
+                        angle_mapping = {0: 0, 1: 270, 2: 180, 3: 90}
+                        rotation_angle = angle_mapping.get(class_id, 0)
+                        
+                        if confidence > 0.5:  # Минимальная уверенность
+                            print(f"[INFO] Detected orientation: {rotation_angle}° (confidence: {confidence:.3f})")
+                            return rotation_angle
+                        else:
+                            print(f"[INFO] Low confidence ({confidence:.3f}), no rotation applied")
+                            return 0
+                    else:
+                        print("[WARNING] No class_ids or scores in result")
+                        return 0
+                else:
+                    print("[WARNING] No 'res' key in result")
+                    return 0
+            else:
+                print("[WARNING] No results from orientation classifier")
+                return 0
+                
+        except Exception as e:
+            print(f"[WARNING] DocImgOrientationClassification failed: {e}")
+            return None
+    
+    
+    def _calculate_confidence_paddleocr(self, result):
+        """Вычисляет среднюю уверенность из результата PaddleOCR"""
+        if not result or not isinstance(result, list) or len(result) == 0:
+            return 0.0
+        
+        # Новый формат результата PaddleOCR
+        page_result = result[0]
+        if not isinstance(page_result, dict):
+            return 0.0
+        
+        # Получаем confidence из rec_scores
+        rec_scores = page_result.get('rec_scores', [])
+        if rec_scores:
+            return sum(rec_scores) / len(rec_scores)
+        
+        return 0.0
+    
 
     def _avg_conf(self, img):
+        if self.ocr is None:
+            return 0.0
+            
         try:
-            data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, lang=self.lang)
-            vals = []
-            for conf in data["conf"]:
-                if isinstance(conf, str) and conf.strip().isdigit():
-                    v = int(conf)
-                    if v > 0:
-                        vals.append(v)
-                elif isinstance(conf, (int, float)) and conf > 0:
-                    vals.append(int(conf))
-            return sum(vals) / len(vals) if vals else 0.0
+            # Конвертируем PIL Image в numpy array для PaddleOCR
+            if isinstance(img, Image.Image):
+                img_array = np.array(img)
+            else:
+                img_array = img
+            
+            # Используем PaddleOCR для получения уверенности распознавания
+            result = self.ocr.ocr(img_array)
+            return self._calculate_confidence_paddleocr(result)
+            
         except Exception as e:
-            print(f"[WARNING] Confidence check failed: {e}")
+            print(f"[WARNING] PaddleOCR confidence check failed: {e}")
             return 0.0
 
     def is_text_upside_down(self, image):

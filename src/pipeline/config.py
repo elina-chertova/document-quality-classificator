@@ -10,7 +10,7 @@ from src.methods.improver.document_lightener import LightenParams
 
 @dataclass
 class ClassifierConfig:
-    dpi: int = 200
+    dpi: int = 400
     brightness_threshold: float = 80.0
     dark_pixels_threshold: float = 30.0
     contrast_threshold: float = 15.0
@@ -89,7 +89,7 @@ class PathsConfig:
 
 @dataclass
 class LightenerConfig:
-    dpi: int = 200
+    dpi: int = 400
     params: LightenParams = field(
         default_factory=lambda: LightenParams(
             target_long_side=2200,

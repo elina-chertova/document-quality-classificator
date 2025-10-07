@@ -12,7 +12,7 @@ from PIL import Image
 
 @dataclass
 class LineRemovalParams:
-    dpi: int = 200
+    dpi: int = 400
     jpeg_quality: int = 95
     min_len_ratio: float = 0.5
     line_thickness: int = 3

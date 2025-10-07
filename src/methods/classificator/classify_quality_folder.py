@@ -22,7 +22,7 @@ def classify_quality_folder(input_folder: str) -> List[Tuple[str, str, str]]:
     files.sort()
 
     assessor = ExtendedPDFQualityAssessor(
-        dpi=200,
+        dpi=400,
         copy_to_dirs=False,
         max_workers=4,
     )
@@ -53,7 +53,7 @@ def classify_quality_and_copy(input_folder: str, output_folder: str) -> List[Tup
         raise FileNotFoundError(f"Папка не найдена: {input_folder}")
 
     assessor = ExtendedPDFQualityAssessor(
-        dpi=200,
+        dpi=400,
         copy_to_dirs=True,
         max_workers=4,
     )

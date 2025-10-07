@@ -14,14 +14,14 @@ from src.pipeline.config import PipelineConfig
 def main():
     print("=== СОЗДАНИЕ ОБУЧАЮЩИХ ДАННЫХ ===")
     try:
-        from src.methods.classificator.classificator_extended import ExtendedPDFQualityAssessor
-        print("✓ Расширенный классификатор загружен")
+        from src.methods.classificator.classificator_easyocr import PDFQualityAssessorEasyOCR
+        print("✓ Классификатор с EasyOCR загружен")
     except ImportError as e:
         print(f"✗ Ошибка импорта классификатора: {e}")
         return 1
 
-    classifier = ExtendedPDFQualityAssessor(
-        dpi=300,
+    classifier = PDFQualityAssessorEasyOCR(
+        dpi=200,  # Снижаем DPI для стабильности EasyOCR
         copy_to_dirs=False,
         blur_low=300.0,
         min_roi_area_frac=0.45,
