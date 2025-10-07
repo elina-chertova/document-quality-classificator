@@ -149,3 +149,42 @@ python src/pipeline/inference.py
 python -m src.compare_ocr_backends
 ```
 Результат: создаются подпапки `tesseract/` и `surya/` c TXT, и `compare.csv` с длинами текстов и CER (если указаны эталоны).
+
+
+## Детекция печатей (YOLO Stamp Detector)
+
+### Детекция печатей на одном изображении
+```python
+from src.methods.detector import detect_stamps_single
+
+result = detect_stamps_single(
+    image_path="document.pdf",
+    conf_threshold=0.25,
+    visualize=True,
+)
+print(f"Найдено печатей: {result['num_stamps']}")
+```
+
+### Детекция печатей в папке
+```python
+from src.methods.detector import detect_stamps_folder
+
+summary = detect_stamps_folder(
+    input_folder="documents/",
+    conf_threshold=0.25,
+    recursive=False,
+)
+print(f"Обработано: {summary['total_images']}, найдено печатей: {summary['total_stamps']}")
+```
+
+### Через командную строку
+```bash
+# Одно изображение
+python src/test_stamp_detector.py single data_example/all/7_page_1.pdf
+
+# Папка
+python src/test_stamp_detector.py folder data_example/all/
+
+# С параметрами
+python src/test_stamp_detector.py folder data_example/all/ --recursive --conf 0.3
+```
