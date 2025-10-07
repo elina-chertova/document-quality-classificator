@@ -159,7 +159,7 @@ from src.methods.detector import detect_stamps_single
 
 result = detect_stamps_single(
     image_path="document.pdf",
-    conf_threshold=0.25,
+    conf_threshold=0.8,  # По умолчанию 0.8 (80%)
     visualize=True,
 )
 print(f"Найдено печатей: {result['num_stamps']}")
@@ -171,20 +171,22 @@ from src.methods.detector import detect_stamps_folder
 
 summary = detect_stamps_folder(
     input_folder="documents/",
-    conf_threshold=0.25,
+    conf_threshold=0.8,
     recursive=False,
 )
 print(f"Обработано: {summary['total_images']}, найдено печатей: {summary['total_stamps']}")
 ```
 
-### Через командную строку
-```bash
-# Одно изображение
-python src/test_stamp_detector.py single data_example/all/7_page_1.pdf
+### Затирание печатей (анонимизация документов)
+```python
+from src.methods.detector import remove_stamps_from_image, remove_stamps_from_folder
 
-# Папка
-python src/test_stamp_detector.py folder data_example/all/
+# Одно изображение - автоматически детектирует и затирает печати
+result = remove_stamps_from_image("document.pdf")
+print(f"Затерто печатей: {result['num_stamps']}")
+print(f"Очищенный PDF: {result['cleaned_pdf_path']}")
 
-# С параметрами
-python src/test_stamp_detector.py folder data_example/all/ --recursive --conf 0.3
+# Папка - массовое затирание
+summary = remove_stamps_from_folder("documents/", recursive=True)
+print(f"Обработано: {summary['total_images']}, затерто: {summary['total_stamps']}")
 ```
