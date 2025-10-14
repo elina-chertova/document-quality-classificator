@@ -98,26 +98,41 @@ python -m src.pipeline.main
 
 Разложить документы по подпапкам `good/medium/failed/trash` c помощью простого порогового классификатора:
 ```python
-from src.methods.classificator.classificator import PDFQualityAssessor
+# from src.methods.classificator.classificator import PDFQualityAssessor
+# 
+# assessor = PDFQualityAssessor(
+#     dpi=400,
+#     copy_to_dirs=True,
+#     max_workers=4,
+# )
+# 
+# assessor.process_folder(
+#     input_folder="/Users/elinacertova/Downloads/documents_dataset/results/processed",
+#     output_folder="/Users/elinacertova/Downloads/documents_dataset/results/output_sorted",
+#     medium_subdir="medium",
+#     good_subdir="good",
+#     failed_subdir="failed",
+#     trash_subdir="trash",
+# )
 
-assessor = PDFQualityAssessor(
-    dpi=400,
+from src.methods.classificator.classificator_easyocr import PDFQualityAssessorEasyOCR
+
+assessor = PDFQualityAssessorEasyOCR(
+    dpi=200,
+    tesseract_lang="rus+eng", 
     copy_to_dirs=True,
-    max_workers=4,
+    max_workers=4
 )
 
-assessor.process_folder(
-    input_folder="/Users/elinacertova/Downloads/documents_dataset/results/processed",
-    output_folder="/Users/elinacertova/Downloads/documents_dataset/results/output_sorted",
-    medium_subdir="medium",
-    good_subdir="good",
-    failed_subdir="failed",
-    trash_subdir="trash",
+result = assessor.assess_pdf("document.pdf")
+print(f"Category: {result.category}")
+print(f"Words: {result.words_count}")
+print(f"Confidence: {result.median_ocr_conf:.2f}")
+
+results = assessor.process_folder(
+    input_folder="input/",
+    output_folder="output/"
 )
-```
-или
-```yaml
-python simple_classificator.py
 ```
 
 
@@ -126,7 +141,7 @@ python simple_classificator.py
 
 Создаёт `classification_analysis.csv`  ( используются папки`good/medium/failed`):
 ```bash
-python create_training_data.py
+python src/pipeline/create_training_data.py
 ```
 Пути `example_quality_base` и `training_csv_path` берутся из `config.py`.
 
@@ -134,7 +149,7 @@ python create_training_data.py
 
 Подбирает пороги и ML‑модели, выводит метрики и сохраняет лучшую модель:
 ```bash
-python tune_extended_classifier.py
+python src/pipeline/tune_extended_classifier.py
 ```
 Итог сохраняется в `final_quality_classifier_model.pkl` (путь в `config.py → trained_model_path`).
 

@@ -18,3 +18,4 @@ def run_vllm_ocr(root_dir: str = "/Users/elinacertova/Downloads/documents_datase
 run_vllm_ocr()
 
 
+
