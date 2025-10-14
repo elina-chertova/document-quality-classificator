@@ -15,10 +15,9 @@ def rotate_right(root_dir: str = "/Users/elinacertova/Downloads/documents_datase
     input_dir = cfg.paths.split_folder
     output_dir = cfg.paths.rotated_folder
     failed_dir = cfg.paths.failed_rotate_folder
-    
-    # Пытаемся использовать оптимизированный PaddleOCR
+
     try:
-        print("[INFO] Инициализируем оптимизированный PaddleOCR...")
+        print("[INFO] Инициализируем PaddleOCR...")
         rotator = RightAngleRotation(input_dir, output_dir, failed_dir)
         if rotator.orientation_classifier is not None:
             print("[INFO] Используем DocImgOrientationClassification для определения ориентации")

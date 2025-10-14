@@ -33,18 +33,15 @@ class RightAngleRotation:
         self.lang = lang
         self.dpi = dpi
         self.rotation_mode = rotation_mode.lower()
-        
-        # Инициализируем модуль классификации ориентации документа
+
         self.orientation_classifier = None
         self.ocr = None
         try:
-            # Инициализируем классификатор ориентации документа
             self.orientation_classifier = DocImgOrientationClassification(
                 model_name="PP-LCNet_x1_0_doc_ori",
-                device="cpu"  # Используем CPU для избежания проблем с GPU
+                device="cpu"
             )
-            
-            # Инициализируем базовый OCR для определения confidence
+
             paddle_lang = "ch" if "rus" in lang.lower() else "en"
             self.ocr = PaddleOCR(
                 lang=paddle_lang,
