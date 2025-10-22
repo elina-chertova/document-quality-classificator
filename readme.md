@@ -5,6 +5,95 @@ pip install -r requirements.txt
 
 
 
+## Предобработка папки документов (improver #1):
+1. Поделить документ по страницам
+```python
+from src.pipeline.split_pages import split_pages
+
+
+split_pages(input_dir="/Users/elinacertova/Downloads/dataset_tester_dir/docs", 
+            output_dir="/Users/elinacertova/Downloads/dataset_tester_dir/splitted")
+```
+2. Поворот изображения на прямые углы
+```python
+from src.pipeline.rotate_right_runner import rotate_right
+
+
+rotate_right(input_dir='/Users/elinacertova/Downloads/dataset_tester_dir/splitted',
+                 output_dir='/Users/elinacertova/Downloads/dataset_tester_dir/rotated',
+                 failed_dir='/Users/elinacertova/Downloads/dataset_tester_dir/failed')    
+```
+
+3. Выравнивание текста (поворот на углы меньше 45 градусов)
+```python
+from src.pipeline.deskew import deskew_documents
+
+
+deskew_documents(input_dir='/Users/elinacertova/Downloads/dataset_tester_dir/rotated',
+                 output_dir='/Users/elinacertova/Downloads/dataset_tester_dir/deskewed',
+                 failed_dir='/Users/elinacertova/Downloads/dataset_tester_dir/failed')
+```
+
+4. Удаление линий из-за проблем сканирование
+```python
+from src.pipeline.remove_lines_runner import remove_lines
+
+
+remove_lines(input_dir='/Users/elinacertova/Downloads/dataset_tester_dir/deskewed',
+             lines_cleaned_folder='/Users/elinacertova/Downloads/dataset_tester_dir/lines_cleaned',
+             no_lines_ok_folder='/Users/elinacertova/Downloads/dataset_tester_dir/lines_not_detected',
+             combined_output_folder='/Users/elinacertova/Downloads/dataset_tester_dir/combined')
+```
+
+5. Осветление темных документов
+```python
+from src.pipeline.dark_docs_to_light import dark_documents_to_light
+
+dark_documents_to_light(input_folder='/Users/elinacertova/Downloads/dataset_tester_dir/combined',
+                        output_folder='/Users/elinacertova/Downloads/dataset_tester_dir/lightened',
+                        dark_folder='/Users/elinacertova/Downloads/dataset_tester_dir/dark',
+                        combined_output_folder='/Users/elinacertova/Downloads/dataset_tester_dir/lightened_combined')
+```
+
+6. Контракт текста, если он слишком блеклый
+```python
+from src.pipeline.enhance_contrast_runner import enhance_contrast_documents
+
+
+enhance_contrast_documents(input_dir='/Users/elinacertova/Downloads/dataset_tester_dir/lightened_combined',
+                           output_dir='/Users/elinacertova/Downloads/dataset_tester_dir/contrast_enhanced')
+```
+
+### Классификация по подобранным порогам для папки
+```python
+from src.pipeline.quality_classifier_runner import classify_by_quality
+
+
+classify_by_quality(input_folder='/Users/elinacertova/Downloads/dataset_tester_dir/lightened_combined',
+                    output_folder='/Users/elinacertova/Downloads/dataset_tester_dir/classified')
+```
+
+## Пайплайн обработки до классификатора для единичного документа 
+Результаты сохраняются в CSV файл.
+```python
+from src.pipeline.process_single_document import process_single_document
+
+
+process_single_document(
+    input_pdf_path='/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf',
+    output_base_dir='/Users/elinacertova/Downloads/single_doc_test/output',
+    output_csv_path='/Users/elinacertova/Downloads/single_doc_test/results.csv'
+)
+```
+
+
+# ----------------------------------------
+## Протестируйте до этого момента 
+# ----------------------------------------
+
+
+
+
 ## OCR и улучшение качества
 
 ### OCR (Surya)

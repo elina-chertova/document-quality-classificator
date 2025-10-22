@@ -1,21 +1,135 @@
 import io
 import os
 import csv
+import json
 from dataclasses import dataclass
 from typing import List, Dict, Tuple, Optional
 
 import cv2
-import fitz  # PyMuPDF
+import fitz
 import numpy as np
 from PIL import Image
 
 
 @dataclass
 class LineRemovalParams:
-    dpi: int = 400
+    dpi: int = 300
     jpeg_quality: int = 95
-    min_len_ratio: float = 0.5
-    line_thickness: int = 3
+    strength: int = 30
+    min_coverage: float = 0.95
+    inpaint_radius: int = 3
+    inpaint_method: str = "telea"
+    clean_pad_px: int = 0
+    max_side_px: int = 0
+
+
+def _safe_find_contours(img: np.ndarray):
+    res = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    return res[0] if len(res) == 2 else res[1]
+
+
+def _build_long_line_mask(binary: np.ndarray, strength: int, min_coverage: float) -> Tuple[np.ndarray, List[Tuple[int,int,int,int]]]:
+    h, w = binary.shape[:2]
+    horiz = binary.copy()
+    vert = binary.copy()
+
+    horiz_size = max(1, w // max(1, strength))
+    vert_size  = max(1, h // max(1, strength))
+
+    horiz_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (horiz_size, 1))
+    vert_kernel  = cv2.getStructuringElement(cv2.MORPH_RECT, (1, vert_size))
+
+    horiz = cv2.erode(horiz, horiz_kernel)
+    horiz = cv2.dilate(horiz, horiz_kernel)
+    vert  = cv2.erode(vert,  vert_kernel)
+    vert  = cv2.dilate(vert,  vert_kernel)
+
+    mask = np.zeros_like(binary)
+    bboxes: List[Tuple[int,int,int,int]] = []
+
+    cnts_h = _safe_find_contours(horiz)
+    for c in cnts_h:
+        x, y, ww, hh = cv2.boundingRect(c)
+        if ww / float(w) >= min_coverage:
+            if hh > 0:
+                y0 = max(0, y)
+                y1 = min(h, y + hh)
+                if y1 > y0:
+                    cv2.rectangle(mask, (x, y0), (x + ww, y1), 255, -1)
+                    bboxes.append((x, y0, ww, y1 - y0))
+
+    cnts_v = _safe_find_contours(vert)
+    for c in cnts_v:
+        x, y, ww, hh = cv2.boundingRect(c)
+        if hh / float(h) >= min_coverage:
+            if ww > 0:
+                x0 = max(0, x)
+                x1 = min(w, x + ww)
+                if x1 > x0:
+                    cv2.rectangle(mask, (x0, y), (x1, y + hh), 255, -1)
+                    bboxes.append((x0, y, x1 - x0, hh))
+
+    return mask, bboxes
+
+
+def detect_extra_line_image_fast(
+    img_bgr: np.ndarray,
+    min_coverage: float = 0.95,
+    strength: int = 30,
+) -> Dict[str, object]:
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    binary = cv2.adaptiveThreshold(
+        ~gray, 255,
+        cv2.ADAPTIVE_THRESH_MEAN_C,
+        cv2.THRESH_BINARY,
+        15, -2
+    )
+    mask, bboxes = _build_long_line_mask(binary, strength=strength, min_coverage=min_coverage)
+    has_line = cv2.countNonZero(mask) > 0
+    orient = None
+    if has_line and len(bboxes) > 0:
+        hs = sum(1 for (_, _, w, h) in bboxes if w >= h)
+        vs = len(bboxes) - hs
+        orient = "h" if hs >= vs else "v"
+    max_len_ratio = 0.0
+    h, w = gray.shape[:2]
+    for (x, y, ww, hh) in bboxes:
+        max_len_ratio = max(max_len_ratio, max(ww / float(w), hh / float(h)))
+    return {
+        "has_line": has_line,
+        "orientation": orient,
+        "score": float(max_len_ratio),
+        "bboxes": bboxes,
+    }
+
+
+def _inpaint_long_lines(
+    img_bgr: np.ndarray,
+    strength: int,
+    min_coverage: float,
+    pad: int,
+    radius: int,
+    method: str,
+) -> Tuple[np.ndarray, List[Tuple[int,int,int,int]]]:
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    binary = cv2.adaptiveThreshold(
+        ~gray, 255,
+        cv2.ADAPTIVE_THRESH_MEAN_C,
+        cv2.THRESH_BINARY,
+        15, -2
+    )
+    mask, bboxes = _build_long_line_mask(binary, strength=strength, min_coverage=min_coverage)
+
+    if pad > 0 and cv2.countNonZero(mask) > 0:
+        k = cv2.getStructuringElement(cv2.MORPH_RECT, (2 * pad + 1, 2 * pad + 1))
+        mask = cv2.dilate(mask, k, iterations=1)
+
+    if cv2.countNonZero(mask) == 0:
+        return img_bgr, []
+
+    inpaint_flag = cv2.INPAINT_TELEA if method.lower() == "telea" else cv2.INPAINT_NS
+    cleaned = cv2.inpaint(img_bgr, mask, radius, inpaint_flag)
+    return cleaned, bboxes
 
 
 class PDFLineCleaner:
@@ -31,213 +145,60 @@ class PDFLineCleaner:
         os.makedirs(os.path.dirname(self.log_csv_path) or ".", exist_ok=True)
         if new_file:
             with open(self.log_csv_path, mode="w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow([
-                    "source_pdf",
-                    "page_index",
-                    "had_lines",
-                    "orientation",
-                    "score",
-                    "num_boxes",
-                    "boxes",
-                    "action",
-                ])
+                csv.writer(f).writerow(
+                    ["source_pdf", "page_index", "had_lines", "orientation", "score", "num_boxes", "boxes_json", "action"]
+                )
 
     def _log(self, row: List[object]) -> None:
         if not self.log_csv_path:
             return
         with open(self.log_csv_path, mode="a", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(row)
-
-    @staticmethod
-    def remove_lines_from_image(img_bgr: np.ndarray, min_len_ratio: float = 0.5, line_thickness: int = 3) -> np.ndarray:
-        h, w = img_bgr.shape[:2]
-        min_h = max(10, int(min_len_ratio * w))
-        min_v = max(10, int(min_len_ratio * h))
-
-        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-        _, binv = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-
-        kh = cv2.getStructuringElement(cv2.MORPH_RECT, (min_h, 1))
-        hor = cv2.morphologyEx(binv, cv2.MORPH_OPEN, kh, iterations=1)
-
-        kv = cv2.getStructuringElement(cv2.MORPH_RECT, (1, min_v))
-        ver = cv2.morphologyEx(binv, cv2.MORPH_OPEN, kv, iterations=1)
-
-        mask = cv2.bitwise_or(hor, ver)
-
-        band_px = max(4, int(0.01 * min(w, h)))
-        dark_ratio_thr = 0.12
-        if float(np.count_nonzero(binv[0:band_px, :])) / float(binv[0:band_px, :].size) > dark_ratio_thr:
-            mask[0:band_px, :] = 255
-        if float(np.count_nonzero(binv[h - band_px:h, :])) / float(binv[h - band_px:h, :].size) > dark_ratio_thr:
-            mask[h - band_px:h, :] = 255
-        if float(np.count_nonzero(binv[:, 0:band_px])) / float(binv[:, 0:band_px].size) > dark_ratio_thr:
-            mask[:, 0:band_px] = 255
-        if float(np.count_nonzero(binv[:, w - band_px:w])) / float(binv[:, w - band_px:w].size) > dark_ratio_thr:
-            mask[:, w - band_px:w] = 255
-
-        mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_RECT, (line_thickness, line_thickness)), 1)
-
-        cleaned = cv2.inpaint(img_bgr, mask, 3, cv2.INPAINT_TELEA)
-        return cleaned
+            csv.writer(f).writerow(row)
 
     def clean_pdf(self, input_pdf: str, output_pdf: str) -> None:
         p = self.params
         src = fitz.open(input_pdf)
-        out = fitz.open()
-        zoom = p.dpi / 72.0
-        mat = fitz.Matrix(zoom, zoom)
+        try:
+            page = src.load_page(0)
+            zoom = p.dpi / 72.0
+            mat = fitz.Matrix(zoom, zoom)
+            pix = page.get_pixmap(matrix=mat, alpha=False, colorspace=fitz.csRGB)
+            arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, 3)
+            img_bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
 
-        pages_with_lines = 0
-        total_pages = 0
-        for page_index, page in enumerate(src):
-            pix = page.get_pixmap(matrix=mat, alpha=False)
-            img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
-            if pix.n == 1:
-                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-
-            det = detect_extra_line_image(
-                img,
-                min_len_ratio=max(p.min_len_ratio, 0.5),
-                max_thickness_px=max(2, int(2 * p.line_thickness)),
-                table_many_lines_threshold=6,
+            cleaned_bgr, bboxes = _inpaint_long_lines(
+                img_bgr,
+                strength=p.strength,
+                min_coverage=p.min_coverage,
+                pad=p.clean_pad_px,
+                radius=p.inpaint_radius,
+                method=p.inpaint_method,
             )
 
-            if det.get("has_line"):
-                cleaned = self.remove_lines_from_image(img, min_len_ratio=p.min_len_ratio, line_thickness=p.line_thickness)
-            else:
-                cleaned = img
+            has_line = len(bboxes) > 0
+            max_len_ratio = 0.0
+            H, W = img_bgr.shape[:2]
+            for (x, y, w, h) in bboxes:
+                max_len_ratio = max(max_len_ratio, max(w / float(W), h / float(H)))
+            orient = None
+            if has_line:
+                hs = sum(1 for (_, _, w, h) in bboxes if w >= h)
+                vs = len(bboxes) - hs
+                orient = "h" if hs >= vs else "v"
 
-            pil = Image.fromarray(cv2.cvtColor(cleaned, cv2.COLOR_BGR2RGB))
+            pil = Image.fromarray(cv2.cvtColor(cleaned_bgr, cv2.COLOR_BGR2RGB))
             buf = io.BytesIO()
-            pil.save(buf, format="JPEG", quality=p.jpeg_quality)
-            new_page = out.new_page(width=page.rect.width, height=page.rect.height)
-            new_page.insert_image(new_page.rect, stream=buf.getvalue())
+            pil.save(buf, format="JPEG", quality=p.jpeg_quality, subsampling=0, optimize=True)
 
-            # log
+            page.clean_contents()
+            page.insert_image(page.rect, stream=buf.getvalue())
+
             self._log([
-                input_pdf,
-                page_index,
-                bool(det.get("has_line")),
-                det.get("orientation"),
-                det.get("score"),
-                len(det.get("bboxes", [])),
-                det.get("bboxes"),
-                "cleaned" if det.get("has_line") else "noop",
+                input_pdf, 0, has_line, orient, f"{max_len_ratio:.4f}",
+                len(bboxes), json.dumps(bboxes, ensure_ascii=False), "cleaned" if has_line else "noop"
             ])
-            action = "cleaned" if det.get("has_line") else "noop"
-            if det.get("has_line"):
-                pages_with_lines += 1
-            total_pages += 1
-            print(f"[LINES] {os.path.basename(input_pdf)} p{page_index+1}: had_lines={bool(det.get('has_line'))} orient={det.get('orientation')} score={det.get('score'):.2f} boxes={len(det.get('bboxes', []))} action={action}")
 
-        os.makedirs(os.path.dirname(output_pdf) or ".", exist_ok=True)
-        out.save(output_pdf)
-        out.close()
-        src.close()
-        print(f"[LINES] Done {os.path.basename(input_pdf)}: pages_with_lines={pages_with_lines}/{total_pages} → {output_pdf}")
-
-
-@dataclass
-class LineDetectParams:
-    dpi: int = 300
-    min_len_ratio: float = 0.9
-    max_thickness_px: int = 8
-    table_many_lines_threshold: int = 3
-
-
-def detect_extra_line_image(
-    img_bgr: np.ndarray,
-    min_len_ratio: float = 0.9,
-    max_thickness_px: int = 8,
-    table_many_lines_threshold: int = 3,
-) -> Dict[str, object]:
-    h, w = img_bgr.shape[:2]
-    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-    _, binv = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-
-    hor = cv2.morphologyEx(binv, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (max(10, int(min_len_ratio * w)), 1)))
-    ver = cv2.morphologyEx(binv, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(10, int(min_len_ratio * h)))))
-
-    def extract_boxes(mask: np.ndarray, orient: str) -> List[Tuple[int, int, int, int]]:
-        cnts, _ = cv2.findContours(cv2.dilate(mask, np.ones((3, 3), np.uint8), 1), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        boxes: List[Tuple[int, int, int, int]] = []
-        for c in cnts:
-            x, y, ww, hh = cv2.boundingRect(c)
-            if orient == 'h' and ww >= int(min_len_ratio * w) and hh <= max_thickness_px:
-                boxes.append((x, y, ww, hh))
-            if orient == 'v' and hh >= int(min_len_ratio * h) and ww <= max_thickness_px:
-                boxes.append((x, y, ww, hh))
-        return boxes
-
-    h_boxes = extract_boxes(hor, 'h')
-    v_boxes = extract_boxes(ver, 'v')
-
-
-    band_px = max(4, int(0.01 * min(w, h)))
-    dark_ratio_thr = 0.12
-
-    top_band = binv[0:band_px, :]
-    if float(np.count_nonzero(top_band)) / float(top_band.size) > dark_ratio_thr:
-        h_boxes.append((0, 0, w, band_px))
-
-    bottom_band = binv[h - band_px:h, :]
-    if float(np.count_nonzero(bottom_band)) / float(bottom_band.size) > dark_ratio_thr:
-        h_boxes.append((0, h - band_px, w, band_px))
-
-    left_band = binv[:, 0:band_px]
-    if float(np.count_nonzero(left_band)) / float(left_band.size) > dark_ratio_thr:
-        v_boxes.append((0, 0, band_px, h))
-
-    right_band = binv[:, w - band_px:w]
-    if float(np.count_nonzero(right_band)) / float(right_band.size) > dark_ratio_thr:
-        v_boxes.append((w - band_px, 0, band_px, h))
-
-    def is_table_like(boxes: List[Tuple[int, int, int, int]], orient: str) -> bool:
-        if len(boxes) < table_many_lines_threshold:
-            return False
-        coords = [y for (_, y, _, _) in boxes] if orient == 'h' else [x for (x, _, _, _) in boxes]
-        spread = (max(coords) - min(coords)) / (h if orient == 'h' else w)
-        return spread > 0.6
-
-    if is_table_like(h_boxes, 'h'):
-        h_boxes = []
-    if is_table_like(v_boxes, 'v'):
-        v_boxes = []
-
-    def score(boxes: List[Tuple[int, int, int, int]], orient: str) -> float:
-        if not boxes:
-            return 0.0
-        lengths = [bw / w if orient == 'h' else bh / h for (_, _, bw, bh) in boxes]
-        thicks = [bh if orient == 'h' else bw for (_, _, bw, bh) in boxes]
-        s_len = max(lengths)
-        s_th = max(0.0, 1.0 - (min(thicks) / max(1.0, float(max_thickness_px))))
-        return 0.8 * s_len + 0.2 * s_th
-
-    h_score, v_score = score(h_boxes, 'h'), score(v_boxes, 'v')
-    if h_score == 0 and v_score == 0:
-        return {'has_line': False, 'orientation': None, 'score': 0.0, 'bboxes': []}
-    if h_score >= v_score:
-        return {'has_line': True, 'orientation': 'h', 'score': float(h_score), 'bboxes': h_boxes}
-    else:
-        return {'has_line': True, 'orientation': 'v', 'score': float(v_score), 'bboxes': v_boxes}
-
-
-def detect_extra_line_pdf(pdf_path: str, params: LineDetectParams = LineDetectParams()) -> List[Dict[str, object]]:
-    doc = fitz.open(pdf_path)
-    zoom = params.dpi / 72.0
-    mat = fitz.Matrix(zoom, zoom)
-    results: List[Dict[str, object]] = []
-    for page in doc:
-        pix = page.get_pixmap(matrix=mat, alpha=False)
-        img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
-        if pix.n == 1:
-            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-        res = detect_extra_line_image(img, params.min_len_ratio, params.max_thickness_px, params.table_many_lines_threshold)
-        results.append(res)
-    doc.close()
-    return results
-
-
+            os.makedirs(os.path.dirname(output_pdf) or ".", exist_ok=True)
+            src.save(output_pdf, deflate=True, garbage=4)
+        finally:
+            src.close()

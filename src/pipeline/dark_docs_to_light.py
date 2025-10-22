@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 
 from src.methods.classificator.dark_document_classifier import DarkDocumentClassifier
 from src.methods.improver.document_lightener import PDFDocumentLightener
@@ -7,7 +8,21 @@ from src.pipeline.config import PipelineConfig
 from src.pipeline.processing import classify_documents, copy_normal_documents, lighten_dark_documents
 
 
-def dark_documents_to_light():
+def dark_documents_to_light(
+    input_folder: str,
+    output_folder: str,
+    dark_folder: str,
+    combined_output_folder: str | None = None,
+    dpi: int = 200,
+    brightness_threshold: float = 100.0,
+    dark_pixels_threshold: float = 0.3,
+    contrast_threshold: float = 40.0,
+    very_dark_pixels_threshold: float = 0.1,
+    copy_to_dirs: bool = True,
+    max_workers: int = 4,
+    lightener_dpi: int = 300,
+    passes: int = 2,
+):
     print("=" * 60)
     print("ОБЪЕДИНЕННАЯ ОБРАБОТКА ДОКУМЕНТОВ")
     print("=" * 60)
@@ -15,24 +30,19 @@ def dark_documents_to_light():
     cfg = PipelineConfig()
 
     classifier = DarkDocumentClassifier(
-        dpi=cfg.classifier.dpi,
-        brightness_threshold=cfg.classifier.brightness_threshold,
-        dark_pixels_threshold=cfg.classifier.dark_pixels_threshold,
-        contrast_threshold=cfg.classifier.contrast_threshold,
-        very_dark_pixels_threshold=cfg.classifier.very_dark_pixels_threshold,
-        copy_to_dirs=cfg.classifier.copy_to_dirs,
-        max_workers=cfg.classifier.max_workers,
+        dpi=dpi,
+        brightness_threshold=brightness_threshold,
+        dark_pixels_threshold=dark_pixels_threshold,
+        contrast_threshold=contrast_threshold,
+        very_dark_pixels_threshold=very_dark_pixels_threshold,
+        copy_to_dirs=copy_to_dirs,
+        max_workers=max_workers,
     )
 
     lightener = PDFDocumentLightener(
-        dpi=cfg.lightener.dpi,
+        dpi=lightener_dpi,
         lighten_params=cfg.lightener.params,
     )
-
-    # После шага удаления линий используем очищенную папку как вход
-    input_folder = cfg.paths.lines_cleaned_folder
-    output_folder = cfg.paths.output_folder
-    dark_folder = cfg.paths.dark_folder
     
     print(f"Входная папка: {input_folder}")
     print(f"Выходная папка: {output_folder}")
@@ -45,6 +55,8 @@ def dark_documents_to_light():
 
     os.makedirs(output_folder, exist_ok=True)
     os.makedirs(dark_folder, exist_ok=True)
+    if combined_output_folder:
+        os.makedirs(combined_output_folder, exist_ok=True)
     
     try:
         print("1. Классификация документов...")
@@ -68,7 +80,7 @@ def dark_documents_to_light():
             output_folder=output_folder,
             lightener=lightener,
             lighten_params=cfg.lightener.params,
-            passes=2,
+            passes=passes,
         )
         print(f"   Обработано: {lightening_results['processed']}")
         print(f"   Успешно: {lightening_results['success']}")
@@ -77,6 +89,20 @@ def dark_documents_to_light():
             print(f"   Файлы с ошибками:")
             for error_file in lightening_results['errors']:
                 print(f"     {error_file}")
+
+        if combined_output_folder:
+            print("\n4. Копирование всех результатов в комбинированную папку...")
+            copied_count = 0
+            for fname in os.listdir(output_folder):
+                if fname.lower().endswith('.pdf'):
+                    src = os.path.join(output_folder, fname)
+                    dst = os.path.join(combined_output_folder, fname)
+                    try:
+                        shutil.copy2(src, dst)
+                        copied_count += 1
+                    except Exception as e:
+                        print(f"   [ОШИБКА] Не удалось скопировать {fname}: {e}")
+            print(f"   Скопировано в комбинированную папку: {copied_count}")
 
         print("\n" + "=" * 60)
         print("ИТОГОВЫЕ РЕЗУЛЬТАТЫ")
@@ -87,6 +113,9 @@ def dark_documents_to_light():
         print(f"Ошибки классификации: {len(error_docs)}")
         print(f"\nВсе обработанные документы сохранены в:")
         print(f"  {output_folder}")
+        if combined_output_folder:
+            print(f"\nКомбинированные результаты также сохранены в:")
+            print(f"  {combined_output_folder}")
         
         return 0
         
