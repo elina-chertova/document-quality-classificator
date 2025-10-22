@@ -73,7 +73,8 @@ classify_by_quality(input_folder='/Users/elinacertova/Downloads/dataset_tester_d
                     output_folder='/Users/elinacertova/Downloads/dataset_tester_dir/classified')
 ```
 
-## Пайплайн обработки до классификатора для единичного документа 
+## Пайплайн обработки до классификатора для единичного документа  
+Ненужные модули можно закомментировать в коде в process_single_document.
 Результаты сохраняются в CSV файл.
 ```python
 from src.pipeline.process_single_document import process_single_document
