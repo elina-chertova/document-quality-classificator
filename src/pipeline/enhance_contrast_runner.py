@@ -15,6 +15,8 @@ def enhance_contrast_documents(
     darkness_boost: float = 1.5,
     dpi: int = 300,
 ):
+    Image.MAX_IMAGE_PIXELS = None
+    
     os.makedirs(output_dir, exist_ok=True)
     
     files = [f for f in os.listdir(input_dir) if f.lower().endswith('.pdf')]
@@ -57,7 +59,7 @@ def enhance_contrast_documents(
                 
                 pil_img = Image.fromarray(enhanced_rgb)
                 img_bytes = io.BytesIO()
-                pil_img.save(img_bytes, format='PNG')
+                pil_img.save(img_bytes, format='JPEG', quality=95)
                 img_bytes.seek(0)
                 
                 img_page = out_doc.new_page(width=pix.width, height=pix.height)

@@ -55,7 +55,7 @@ dark_documents_to_light(input_folder='/Users/elinacertova/Downloads/dataset_test
                         combined_output_folder='/Users/elinacertova/Downloads/dataset_tester_dir/lightened_combined')
 ```
 
-6. Контракт текста, если он слишком блеклый
+6. Контракт текста, если он слишком блеклый (в тестировании, пока что убивает весь блюр, поэтому при классификации попадает в trash: можно начать использовать, если не учитывать результаты классификации для данных документов)
 ```python
 from src.pipeline.enhance_contrast_runner import enhance_contrast_documents
 
