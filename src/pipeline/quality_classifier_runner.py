@@ -24,3 +24,5 @@ def classify_by_quality(
     print("КЛАССИФИКАЦИЯ ЗАВЕРШЕНА")
     print("=" * 60)
 
+
+

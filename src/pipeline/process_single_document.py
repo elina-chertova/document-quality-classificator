@@ -52,13 +52,13 @@ def process_single_document(
     
     print("\n1. Разделение по страницам...")
     split_pages(input_dir=temp_input_dir, output_dir=splitted_dir)
-    
+
     print("\n2. Поворот изображений...")
     rotate_right(input_dir=splitted_dir, output_dir=rotated_dir, failed_dir=failed_dir)
-    
+
     print("\n3. Выравнивание текста...")
     deskew_documents(input_dir=rotated_dir, output_dir=deskewed_dir, failed_dir=failed_dir)
-    
+
     print("\n4. Удаление линий...")
     remove_lines(
         input_dir=deskewed_dir,
@@ -66,13 +66,14 @@ def process_single_document(
         no_lines_ok_folder=no_lines_dir,
         combined_output_folder=combined_dir
     )
-    
+
     print("\n5. Осветление темных документов...")
     dark_documents_to_light(
         input_folder=combined_dir,
         output_folder=lightened_dir,
         dark_folder=dark_dir,
-        combined_output_folder=lightened_combined_dir
+        combined_output_folder=lightened_combined_dir,
+        lightening_method='bilateral_filter'
     )
     
     print("\n6. Усиление контраста...")

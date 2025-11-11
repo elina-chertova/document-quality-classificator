@@ -4,6 +4,7 @@ import shutil
 
 from src.methods.classificator.dark_document_classifier import DarkDocumentClassifier
 from src.methods.improver.document_lightener import PDFDocumentLightener
+from src.methods.improver.bilateral_lightener import PDFBilateralLightener
 from src.pipeline.config import PipelineConfig
 from src.pipeline.processing import classify_documents, copy_normal_documents, lighten_dark_documents
 
@@ -22,6 +23,7 @@ def dark_documents_to_light(
     max_workers: int = 4,
     lightener_dpi: int = 300,
     passes: int = 2,
+    lightening_method: str = "bilateral_filter",  # "bilateral_filter" или "original"
 ):
     print("=" * 60)
     print("ОБЪЕДИНЕННАЯ ОБРАБОТКА ДОКУМЕНТОВ")
@@ -39,10 +41,16 @@ def dark_documents_to_light(
         max_workers=max_workers,
     )
 
-    lightener = PDFDocumentLightener(
-        dpi=lightener_dpi,
-        lighten_params=cfg.lightener.params,
-    )
+    # Выбор метода осветления
+    if lightening_method == "bilateral_filter":
+        lightener = PDFBilateralLightener(dpi=lightener_dpi)
+        print(f"Метод осветления: bilateral_filter (лучший по тестам)")
+    else:
+        lightener = PDFDocumentLightener(
+            dpi=lightener_dpi,
+            lighten_params=cfg.lightener.params,
+        )
+        print(f"Метод осветления: original")
     
     print(f"Входная папка: {input_folder}")
     print(f"Выходная папка: {output_folder}")
@@ -75,13 +83,20 @@ def dark_documents_to_light(
         print(f"   Скопировано: {normal_count}")
         
         print("\n3. Осветление темных документов...")
-        lightening_results = lighten_dark_documents(
-            dark_folder=dark_folder,
-            output_folder=output_folder,
-            lightener=lightener,
-            lighten_params=cfg.lightener.params,
-            passes=passes,
-        )
+
+        if lightening_method == "bilateral_filter":
+            lightening_results = lightener.process_dark_folder(
+                input_folder=os.path.join(dark_folder, "dark_documents"),
+                output_folder=output_folder
+            )
+        else:
+            lightening_results = lighten_dark_documents(
+                dark_folder=dark_folder,
+                output_folder=output_folder,
+                lightener=lightener,
+                lighten_params=cfg.lightener.params,
+                passes=passes,
+            )
         print(f"   Обработано: {lightening_results['processed']}")
         print(f"   Успешно: {lightening_results['success']}")
         print(f"   Ошибки: {lightening_results['failed']}")
