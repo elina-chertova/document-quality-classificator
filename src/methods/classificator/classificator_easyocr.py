@@ -14,6 +14,8 @@ import easyocr
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from PIL import Image
 
+from src.pipeline.config import PipelineConfig
+
 
 @dataclass
 class PDFQualityResult:
@@ -59,6 +61,7 @@ class PDFQualityAssessorEasyOCR:
         min_roi_area_frac: float = 0.45,
         skew_bad_deg: float = 12.0,
         skew_warn_deg: float = 7.0,
+        device: Optional[str] = None,
     ):
         self.dpi = int(dpi)
         self.tesseract_lang = tesseract_lang
@@ -71,6 +74,9 @@ class PDFQualityAssessorEasyOCR:
         self.min_roi_area_frac = float(min_roi_area_frac)
         self.skew_bad_deg = float(skew_bad_deg)
         self.skew_warn_deg = float(skew_warn_deg)
+        self.device_preference = self._resolve_device(device)
+        self._use_gpu = self._should_use_gpu(self.device_preference)
+        self.on_log(f"[INFO] EasyOCR device preference: {self.device_preference} (gpu={self._use_gpu})")
         
         # Инициализация EasyOCR
         try:
@@ -83,11 +89,21 @@ class PDFQualityAssessorEasyOCR:
             if not langs:
                 langs = ['en']
             
-            self.reader = easyocr.Reader(langs, gpu=False)
+            self.reader = easyocr.Reader(langs, gpu=self._use_gpu)
             self.on_log("[INFO] EasyOCR инициализирован для классификации качества")
         except Exception as e:
-            self.on_log(f"[WARNING] Ошибка инициализации EasyOCR: {e}")
-            self.reader = None
+            if self._use_gpu:
+                self.on_log(f"[WARNING] Ошибка инициализации EasyOCR на GPU ({e}), пробуем CPU...")
+                try:
+                    self.reader = easyocr.Reader(langs, gpu=False)
+                    self._use_gpu = False
+                    self.on_log("[INFO] EasyOCR успешно переключен на CPU")
+                except Exception as cpu_error:
+                    self.on_log(f"[ERROR] EasyOCR не удалось запустить даже на CPU: {cpu_error}")
+                    self.reader = None
+            else:
+                self.on_log(f"[ERROR] Ошибка инициализации EasyOCR: {e}")
+                self.reader = None
 
     def _to_gray(self, image: Image.Image) -> np.ndarray:
         return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
@@ -204,6 +220,20 @@ class PDFQualityAssessorEasyOCR:
         _, thr = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         thr = cv2.medianBlur(thr, 3)
         return Image.fromarray(thr)
+
+    @staticmethod
+    def _resolve_device(preferred: Optional[str]) -> str:
+        if preferred and preferred.strip():
+            return preferred.strip()
+        try:
+            return PipelineConfig().device.summary()
+        except Exception:
+            return "cpu"
+
+    @staticmethod
+    def _should_use_gpu(device: str) -> bool:
+        val = device.lower()
+        return val.startswith("cuda") or val.startswith("gpu")
 
     def _ocr_metrics_easyocr(self, image: Image.Image) -> Tuple[float, float, float, int]:
         """Использование EasyOCR для получения OCR метрик"""

@@ -19,9 +19,11 @@ from io import BytesIO
 # Импортируем PaddleOCR модули
 from paddleocr import PaddleOCR, DocImgOrientationClassification
 
+from src.pipeline.config import PipelineConfig
+
 
 class RightAngleRotation:
-    def __init__(self, input_folder, output_folder, failed_folder, lang="rus+eng", dpi=300, rotation_mode="physical"):
+    def __init__(self, input_folder, output_folder, failed_folder, lang="rus+eng", dpi=300, rotation_mode="physical", device: str | None = None):
         """
         rotation_mode:
             - "logical": использует set_rotation (без потерь, но может не работать корректно)
@@ -33,28 +35,18 @@ class RightAngleRotation:
         self.lang = lang
         self.dpi = dpi
         self.rotation_mode = rotation_mode.lower()
+        self.device_preference = self._resolve_device(device)
+        self._gpu_requested = self._should_use_gpu(self.device_preference)
+        print(f"[INFO] Правка ориентации: целевое устройство – {self.device_preference}")
 
         self.orientation_classifier = None
         self.ocr = None
-        try:
-            self.orientation_classifier = DocImgOrientationClassification(
-                model_name="PP-LCNet_x1_0_doc_ori",
-                device="cpu"
-            )
 
-            paddle_lang = "ch" if "rus" in lang.lower() else "en"
-            self.ocr = PaddleOCR(
-                lang=paddle_lang,
-                use_textline_orientation=False,
-                use_doc_orientation_classify=False,
-                use_doc_unwarping=False
-            )
+        paddle_lang = "ch" if "rus" in lang.lower() else "en"
+        self._init_orientation_classifier()
+        self._init_paddle_ocr(lang=paddle_lang)
+        if self.orientation_classifier is not None:
             print("[INFO] Используем DocImgOrientationClassification для определения ориентации")
-        except Exception as e:
-            print(f"[ERROR] Не удалось инициализировать PaddleOCR модули: {e}")
-            print("[WARNING] Будет использоваться упрощенная логика без OCR")
-            self.orientation_classifier = None
-            self.ocr = None
 
     def detect_page_rotation(self, page_image):
         if self.orientation_classifier is None:
@@ -158,6 +150,69 @@ class RightAngleRotation:
         conf_normal = self._avg_conf(image)
         conf_rot180 = self._avg_conf(image.rotate(180, expand=True))
         return conf_rot180 > conf_normal
+
+    def _init_orientation_classifier(self) -> None:
+        device_candidates = []
+        if self._gpu_requested:
+            device_candidates.append("gpu")
+        device_candidates.append("cpu")
+
+        for dev in device_candidates:
+            try:
+                self.orientation_classifier = DocImgOrientationClassification(
+                    model_name="PP-LCNet_x1_0_doc_ori",
+                    device=dev,
+                )
+                if dev == "gpu":
+                    print("[INFO] DocImgOrientationClassification запущен на GPU")
+                else:
+                    if self._gpu_requested:
+                        print("[INFO] DocImgOrientationClassification переключён на CPU")
+                    self._gpu_requested = False
+                return
+            except Exception as e:
+                print(f"[WARNING] Не удалось инициализировать DocImgOrientationClassification на {dev.upper()}: {e}")
+        print("[ERROR] DocImgOrientationClassification недоступен (ни GPU, ни CPU)")
+        self.orientation_classifier = None
+
+    def _init_paddle_ocr(self, lang: str) -> None:
+        ocr_candidates = []
+        if self._gpu_requested:
+            ocr_candidates.append(True)
+        ocr_candidates.append(False)
+
+        for use_gpu in ocr_candidates:
+            try:
+                self.ocr = PaddleOCR(
+                    lang=lang,
+                    use_textline_orientation=False,
+                    use_doc_orientation_classify=False,
+                    use_doc_unwarping=False,
+                    use_gpu=use_gpu,
+                )
+                mode = "GPU" if use_gpu else "CPU"
+                print(f"[INFO] PaddleOCR инициализирован ({mode})")
+                if not use_gpu:
+                    self._gpu_requested = False
+                return
+            except Exception as e:
+                print(f"[WARNING] PaddleOCR не удалось запустить на {'GPU' if use_gpu else 'CPU'}: {e}")
+        print("[ERROR] PaddleOCR недоступен – будет использоваться упрощённая логика")
+        self.ocr = None
+
+    @staticmethod
+    def _resolve_device(device: str | None) -> str:
+        if device and device.strip():
+            return device.strip()
+        try:
+            return PipelineConfig().device.summary()
+        except Exception:
+            return "cpu"
+
+    @staticmethod
+    def _should_use_gpu(device: str) -> bool:
+        val = device.lower()
+        return val.startswith("cuda") or val.startswith("gpu")
 
     def render_rotated_page_as_image(self, input_pdf, output_pdf, angle):
         try:

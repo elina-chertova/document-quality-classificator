@@ -4,8 +4,22 @@
 
 from dataclasses import dataclass, field
 import os
+from pathlib import Path
 
 from src.methods.improver.document_lightener import LightenParams
+
+try:
+    from dotenv import load_dotenv  # type: ignore
+except ImportError:
+    load_dotenv = None
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if load_dotenv:
+    load_dotenv(_PROJECT_ROOT / ".env", override=False)
+
+
+def _default_device_target() -> str:
+    return os.getenv("DQC_DEVICE", os.getenv("PIPELINE_DEVICE", "cpu"))
 
 
 @dataclass
@@ -105,9 +119,34 @@ class LightenerConfig:
 
 
 @dataclass
+class DeviceConfig:
+    target: str = field(default_factory=_default_device_target)
+
+    @property
+    def normalized(self) -> str:
+        raw = (self.target or "cpu").strip()
+        return raw if raw else "cpu"
+
+    @property
+    def wants_gpu(self) -> bool:
+        norm = self.normalized.lower()
+        return norm.startswith("cuda") or norm.startswith("gpu")
+
+    def paddle_device(self) -> str:
+        return "gpu" if self.wants_gpu else "cpu"
+
+    def easyocr_gpu_flag(self) -> bool:
+        return self.wants_gpu
+
+    def summary(self) -> str:
+        return self.normalized
+
+
+@dataclass
 class PipelineConfig:
     classifier: ClassifierConfig = field(default_factory=ClassifierConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
     lightener: LightenerConfig = field(default_factory=LightenerConfig)
+    device: DeviceConfig = field(default_factory=DeviceConfig)
 
 

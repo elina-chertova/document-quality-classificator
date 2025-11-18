@@ -14,8 +14,6 @@ from src.pipeline.split_pages import split_pages
 from src.pipeline.quality_classifier_runner import classify_by_quality
 from src.pipeline.process_single_document import process_single_document
 
-from src.pipeline.enhance_contrast_runner import enhance_contrast_documents
-
 # from src.pipeline.config import PipelineConfig
 
 
@@ -42,11 +40,11 @@ def main():
     #              lines_cleaned_folder='/Users/elinacertova/Downloads/dataset_tester_full/lines_cleaned',
     #              no_lines_ok_folder='/Users/elinacertova/Downloads/dataset_tester_full/lines_not_detected',
     #              combined_output_folder='/Users/elinacertova/Downloads/dataset_tester_full/combined')
-    dark_documents_to_light(input_folder='/Users/elinacertova/Downloads/dataset_tester_full/combined',
-                            output_folder='/Users/elinacertova/Downloads/dataset_tester_full/lightened',
-                            dark_folder='/Users/elinacertova/Downloads/dataset_tester_full/dark',
-                            combined_output_folder='/Users/elinacertova/Downloads/dataset_tester_full/lightened_combined',
-                            lightening_method='bilateral_filter')
+    # dark_documents_to_light(input_folder='/Users/elinacertova/Downloads/dataset_tester_full/combined',
+    #                         output_folder='/Users/elinacertova/Downloads/dataset_tester_full/lightened',
+    #                         dark_folder='/Users/elinacertova/Downloads/dataset_tester_full/dark',
+    #                         combined_output_folder='/Users/elinacertova/Downloads/dataset_tester_full/lightened_combined',
+    #                         lightening_method='bilateral_filter')
     # enhance_contrast_documents(input_dir='/Users/elinacertova/Downloads/dataset_tester_full/lightened_combined',
     #                            output_dir='/Users/elinacertova/Downloads/dataset_tester_full/contrast_enhanced')
     # classify_by_quality(input_folder='/Users/elinacertova/Downloads/dataset_tester_full/contrast_enhanced',
@@ -59,12 +57,13 @@ def main():
     #     dpi=250,
     #     max_workers=4
     # )
-    
-    # process_single_document(
-    #     input_pdf_path='/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf',
-    #     output_base_dir='/Users/elinacertova/Downloads/single_doc_test/output',
-    #     output_csv_path='/Users/elinacertova/Downloads/single_doc_test/results.csv'
-    # )
+    # doc01753420250721150145_page_13
+    # Scan_20250213_120013
+    process_single_document(
+        input_pdf_path='/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf',
+        output_base_dir='/Users/elinacertova/Downloads/single_doc_test/output',
+        output_csv_path='/Users/elinacertova/Downloads/single_doc_test/results.csv'
+    )
     
     # process_single_document_fastest(
     #     input_pdf_path='/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf',
@@ -87,12 +86,12 @@ def main():
     #     output_csv='/Users/elinacertova/Downloads/single_doc_test/quality_comparison.csv',
     #     dpi=400
     # )
-    compare_folder(
-        original_dir='/Users/elinacertova/Downloads/dataset_tester_full/splitted',
-        processed_dir='/Users/elinacertova/Downloads/dataset_tester_full/contrast_enhanced',
-        output_csv='/Users/elinacertova/Downloads/dataset_tester_full/quality_comparison.csv',
-        dpi=300
-    )
+    # compare_folder(
+    #     original_dir='/Users/elinacertova/Downloads/dataset_tester_full/splitted',
+    #     processed_dir='/Users/elinacertova/Downloads/dataset_tester_full/contrast_enhanced',
+    #     output_csv='/Users/elinacertova/Downloads/dataset_tester_full/quality_comparison.csv',
+    #     dpi=300
+    # )
 
 if __name__ == "__main__":
     sys.exit(main())

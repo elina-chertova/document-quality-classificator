@@ -3,7 +3,10 @@
 pip install -r requirements.txt
 ```
 
-
+### Выбор cpu/gpu прописывается в .env
+```shell
+DQC_DEVICE=cuda:0
+```
 
 ## Предобработка папки документов (improver #1):
 1. Поделить документ по страницам
@@ -55,13 +58,15 @@ dark_documents_to_light(input_folder='/Users/elinacertova/Downloads/dataset_test
                         combined_output_folder='/Users/elinacertova/Downloads/dataset_tester_dir/lightened_combined')
 ```
 
-6. Контракт текста, если он слишком блеклый (в тестировании, пока что убивает весь блюр, поэтому при классификации попадает в trash: можно начать использовать, если не учитывать результаты классификации для данных документов)
+6. Усиление текста (для светлых страниц)
 ```python
-from src.pipeline.enhance_contrast_runner import enhance_contrast_documents
+from src.pipeline.text_enhancement_runner import enhance_text_documents
 
 
-enhance_contrast_documents(input_dir='/Users/elinacertova/Downloads/dataset_tester_dir/lightened_combined',
-                           output_dir='/Users/elinacertova/Downloads/dataset_tester_dir/contrast_enhanced')
+enhance_text_documents(
+    input_dir='/Users/elinacertova/Downloads/dataset_tester_dir/lightened_combined',
+    output_dir='/Users/elinacertova/Downloads/dataset_tester_dir/text_enhanced'
+)
 ```
 
 ### Классификация по подобранным порогам для папки

@@ -2,27 +2,31 @@ import cv2
 import numpy as np
 
 
-def enhance_text_contrast(img_bgr, brightness_thresh=120, darkness_boost=1.5):
-    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+def enhance_text_contrast(
+    img_bgr: np.ndarray,
+    target_l_mean: float = 185.0,
+    max_light_boost: float = 1.35,
+    saturation_boost: float = 1.12,
+    value_boost: float = 1.05,
+):
+    lab = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2LAB)
+    L, a, b = cv2.split(lab)
 
-    inv = 255 - gray
-    _, mask = cv2.threshold(inv, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    L_clahe = clahe.apply(L)
+    avg_l = float(np.mean(L_clahe))
 
-    dark_pixels = gray[mask > 0]
-    if len(dark_pixels) == 0:
-        return img_bgr, False, 0.0
+    gain = min(target_l_mean / max(avg_l, 1.0), max_light_boost) if avg_l > 0 else 1.0
+    L_boosted = np.clip(L_clahe * gain, 0, 255).astype(np.uint8)
 
-    avg_dark = np.mean(dark_pixels)
+    lab_enhanced = cv2.merge([L_boosted, a, b])
+    enhanced_bgr = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2BGR)
 
-    if avg_dark > brightness_thresh:
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        enhanced = clahe.apply(gray)
+    hsv = cv2.cvtColor(enhanced_bgr, cv2.COLOR_BGR2HSV).astype(np.float32)
+    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * saturation_boost, 0, 255)
+    hsv[:, :, 2] = np.clip(hsv[:, :, 2] * value_boost, 0, 255)
+    enhanced_bgr = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
 
-        enhanced = np.clip(enhanced / darkness_boost, 0, 255).astype(np.uint8)
-
-        img_yuv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2YUV)
-        img_yuv[:, :, 0] = enhanced
-        return cv2.cvtColor(img_yuv, cv2.COLOR_YUV2BGR), True, avg_dark
-    else:
-        return img_bgr, False, avg_dark
+    modified = not np.array_equal(enhanced_bgr, img_bgr)
+    return enhanced_bgr, modified, avg_l
 

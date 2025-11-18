@@ -66,6 +66,8 @@ def dark_documents_to_light(
     if combined_output_folder:
         os.makedirs(combined_output_folder, exist_ok=True)
     
+    meta = {"dark_docs": [], "normal_docs": [], "errors": []}
+
     try:
         print("1. Классификация документов...")
         classification_results, dark_docs, normal_docs, error_docs = classify_documents(
@@ -73,6 +75,9 @@ def dark_documents_to_light(
             dark_folder=dark_folder,
             classifier=classifier,
         )
+        meta["dark_docs"] = [os.path.basename(doc.pdf_path) for doc in dark_docs]
+        meta["normal_docs"] = [os.path.basename(doc.pdf_path) for doc in normal_docs]
+        meta["errors"] = [os.path.basename(doc.pdf_path) for doc in error_docs]
         
         print(f"   Нормальные: {len(normal_docs)}")
         print(f"   Темные: {len(dark_docs)}")
@@ -132,8 +137,10 @@ def dark_documents_to_light(
             print(f"\nКомбинированные результаты также сохранены в:")
             print(f"  {combined_output_folder}")
         
-        return 0
+        meta["code"] = 0
+        return meta
         
     except Exception as e:
         print(f"ОШИБКА: {e}")
-        return 1
+        meta["code"] = 1
+        return meta
