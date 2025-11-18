@@ -21,6 +21,7 @@ def process_single_document(
     output_csv_path: str,
     dpi: int = 400,
     max_workers: int = 4,
+    classifier_dpi: int | None = 300,
 ):
     input_pdf_path = os.path.abspath(input_pdf_path)
     output_base_dir = os.path.abspath(output_base_dir)
@@ -92,20 +93,22 @@ def process_single_document(
         skip_filenames=dark_filenames
     )
 
-    # print("\n7. Сравнение OCR до/после text enhancer...")
-    # comparison_csv_path = os.path.join(output_base_dir, f"{document_name}_text_enhancement_quality.csv")
-    # compare_folder(
-    #     original_dir=lightened_combined_dir,
-    #     processed_dir=text_enhanced_dir,
-    #     output_csv=comparison_csv_path,
-    #     dpi=dpi,
-    # )
+    print("\n7. Сравнение OCR до/после text enhancer...")
+    comparison_csv_path = os.path.join(output_base_dir, f"{document_name}_text_enhancement_quality.csv")
+    comparison_results = compare_folder(
+        original_dir=lightened_combined_dir,
+        processed_dir=text_enhanced_dir,
+        output_csv=comparison_csv_path,
+        dpi=dpi,
+        return_results=True,
+    ) or []
 
     # contrast_enhanced_dir=lightened_combined_dir
     
     print("\n8. Классификация документов...")
+    class_dpi = classifier_dpi if classifier_dpi is not None else min(dpi, 300)
     assessor = PDFQualityAssessorEasyOCR(
-        dpi=dpi,
+        dpi=class_dpi,
         copy_to_dirs=False,
         max_workers=max_workers,
     )
@@ -117,6 +120,7 @@ def process_single_document(
         pdf_path = os.path.join(text_enhanced_dir, fname)
         try:
             result = assessor.assess_pdf(pdf_path)
+
             page_num = fname.replace('.pdf', '').split('_page_')[-1] if '_page_' in fname else '1'
             results.append({
                 'document': document_name,

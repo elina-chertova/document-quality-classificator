@@ -207,6 +207,7 @@ class PDFQualityAssessorEasyOCR:
         return area / float(h * w)
 
     def _prep_for_ocr(self, image: Image.Image) -> Image.Image:
+        Image.MAX_IMAGE_PIXELS = None
         im = image
         W, H = im.size
         long_side = max(W, H)
