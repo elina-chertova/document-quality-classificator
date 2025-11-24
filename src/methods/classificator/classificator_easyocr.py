@@ -135,7 +135,21 @@ class PDFQualityAssessorEasyOCR:
 
     def _blur_score(self, image: Image.Image) -> float:
         gray = self._to_gray(image)
-        return float(cv2.Laplacian(gray, cv2.CV_64F).var())
+        lap = cv2.Laplacian(gray, cv2.CV_64F)
+        base_score = float(lap.var())
+
+        _, mask = cv2.threshold(
+            gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+        )
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8), iterations=1)
+        mask_bool = mask > 0
+
+        if np.any(mask_bool):
+            focused = lap[mask_bool]
+            focus_score = float(focused.var())
+            return max(base_score, focus_score)
+
+        return base_score
 
     def _text_density(self, image: Image.Image) -> float:
         gray = self._to_gray(image)
@@ -237,22 +251,17 @@ class PDFQualityAssessorEasyOCR:
         return val.startswith("cuda") or val.startswith("gpu")
 
     def _ocr_metrics_easyocr(self, image: Image.Image) -> Tuple[float, float, float, int]:
-        """Использование EasyOCR для получения OCR метрик"""
         if not self.reader:
             return 0.0, 0.0, 0.0, 0
         
         try:
-            # Конвертируем PIL Image в numpy array для EasyOCR
             img_array = np.array(image)
             
-            # Выполняем OCR с помощью EasyOCR
-            # EasyOCR возвращает список: [([[x1,y1],[x2,y2],[x3,y3],[x4,y4]], text, confidence), ...]
             results = self.reader.readtext(img_array)
             
             if not results:
                 return 0.0, 0.0, 0.0, 0
-            
-            # Извлекаем confidence scores и тексты
+
             confs = []
             words = 0
             
@@ -265,7 +274,6 @@ class PDFQualityAssessorEasyOCR:
                     confidence = detection[2]
                     
                     if isinstance(confidence, (int, float)) and confidence > 0:
-                        # EasyOCR возвращает confidence в диапазоне 0-1, конвертируем в 0-100
                         confs.append(float(confidence * 100))
                         if isinstance(text, str) and text.strip():
                             words += 1
@@ -273,7 +281,6 @@ class PDFQualityAssessorEasyOCR:
             if not confs:
                 return 0.0, 0.0, 0.0, 0
             
-            # Вычисляем метрики аналогично pytesseract
             med = float(np.median(confs))
             mean = float(np.mean(confs))
             p80 = float(sum(c >= 80 for c in confs)) / float(len(confs))
@@ -292,8 +299,11 @@ class PDFQualityAssessorEasyOCR:
         if avg_skew_deg >= self.skew_bad_deg:
             return "trash", "skew_bad"
 
-        # EasyOCR возвращает более низкие confidence, корректируем пороги
-        # Полностью мертвый OCR - очень мало слов и низкий confidence
+        if conf_med >= 95 and pct80 >= 0.90:
+            if blur >= max(200, self.blur_low * 0.25):
+                return "good", "text_strong_confident"
+            return "medium", "text_confident_low_blur"
+
         if words < 10 and conf_med < 10 and pct80 < 0.05:
             return "trash", "ocr_dead"
         if blur < 120 and pct80 < 0.10:
@@ -303,17 +313,14 @@ class PDFQualityAssessorEasyOCR:
             return "trash", "miniature_poor"
 
         if is_table:
-            # Для таблиц: более мягкие критерии с EasyOCR
             if conf_med >= 40 and pct80 >= 0.20 and blur >= 800 and words >= 50:
                 return "good", "table_strong"
             if conf_med >= 20 and pct80 >= 0.08 and blur >= 220 and words >= 20:
                 return "medium", "table_ok"
-            # Если есть достаточно слов, даже с низким confidence - это не trash
             if words >= 30:
                 return "medium", "table_readable"
             return "failed", "table_weak"
 
-        # Для обычного текста: адаптированные пороги для EasyOCR
         if conf_med >= 60 and pct80 >= 0.30 and blur >= self.blur_low:
             return "good", "text_strong"
         if conf_med >= 35 and pct80 >= 0.15 and blur >= 400 and words >= 30:
@@ -321,7 +328,6 @@ class PDFQualityAssessorEasyOCR:
         if conf_med >= 20 and pct80 >= 0.08 and blur >= 200 and words >= 20:
             return "medium", "text_ok"
         
-        # Если распознали много слов, но с низким confidence - все равно readable
         if words >= 50:
             return "medium", "text_readable"
 

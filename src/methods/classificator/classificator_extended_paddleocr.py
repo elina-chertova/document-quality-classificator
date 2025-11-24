@@ -54,6 +54,7 @@ class ExtendedPDFQualityAssessor:
         min_roi_area_frac: float = 0.45,
         skew_bad_deg: float = 12.0,
         skew_warn_deg: float = 7.0,
+        min_words_for_text_quality: int = 20,
     ):
         self.dpi = int(dpi)
         self.tesseract_lang = tesseract_lang
@@ -66,6 +67,7 @@ class ExtendedPDFQualityAssessor:
         self.min_roi_area_frac = float(min_roi_area_frac)
         self.skew_bad_deg = float(skew_bad_deg)
         self.skew_warn_deg = float(skew_warn_deg)
+        self.min_words_for_text_quality = int(min_words_for_text_quality)
         
         # Инициализация PaddleOCR
         try:
@@ -362,7 +364,16 @@ class ExtendedPDFQualityAssessor:
         
         if (conf_med >= 70 and pct80 >= 0.35 and bbox_area_text_frac >= 0.05):
             return "medium", "text_ok"
-        
+
+        if words < self.min_words_for_text_quality:
+            if (
+                conf_med >= 55
+                and pct80 >= 0.25
+                and bbox_area_text_frac >= 0.03
+            ):
+                return "medium", "text_sparse_ok"
+            return "failed", "text_sparse_weak"
+
         return "failed", "text_weak"
 
     def assess_pdf(self, pdf_path: str) -> ExtendedPDFQualityResult:
