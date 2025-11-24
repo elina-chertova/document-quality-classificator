@@ -12,7 +12,7 @@ from src.pipeline.remove_lines_runner import remove_lines
 from src.pipeline.dark_docs_to_light import dark_documents_to_light
 from src.pipeline.text_enhancement_runner import enhance_text_documents
 from src.methods.classificator.classificator_easyocr import PDFQualityAssessorEasyOCR
-from src.pipeline.quality_comparision.quality_comparison import compare_folder
+# from src.pipeline.quality_comparision.quality_comparison import compare_folder
 
 
 def process_single_document(
@@ -93,15 +93,15 @@ def process_single_document(
         skip_filenames=dark_filenames
     )
 
-    print("\n7. Сравнение OCR до/после text enhancer...")
-    comparison_csv_path = os.path.join(output_base_dir, f"{document_name}_text_enhancement_quality.csv")
-    comparison_results = compare_folder(
-        original_dir=lightened_combined_dir,
-        processed_dir=text_enhanced_dir,
-        output_csv=comparison_csv_path,
-        dpi=dpi,
-        return_results=True,
-    ) or []
+    # print("\n7. Сравнение OCR до/после text enhancer...")
+    # comparison_csv_path = os.path.join(output_base_dir, f"{document_name}_text_enhancement_quality.csv")
+    # comparison_results = compare_folder(
+    #     original_dir=lightened_combined_dir,
+    #     processed_dir=text_enhanced_dir,
+    #     output_csv=comparison_csv_path,
+    #     dpi=dpi,
+    #     return_results=True,
+    # ) or []
 
     # contrast_enhanced_dir=lightened_combined_dir
     
