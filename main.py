@@ -4,14 +4,14 @@
 
 import sys
 
-from src.pipeline.dark_docs_to_light import dark_documents_to_light
-from src.pipeline.deskew import deskew_documents
-from src.pipeline.fast_version.process_single_document_fast import process_single_document_fast
-from src.pipeline.quality_comparision.quality_comparison import compare_folder
-from src.pipeline.rotate_right_runner import rotate_right
-from src.pipeline.remove_lines_runner import remove_lines
-from src.pipeline.split_pages import split_pages
-from src.pipeline.quality_classifier_runner import classify_by_quality
+# from src.pipeline.dark_docs_to_light import dark_documents_to_light
+# from src.pipeline.deskew import deskew_documents
+# from src.pipeline.fast_version.process_single_document_fast import process_single_document_fast
+# from src.pipeline.quality_comparision.quality_comparison import compare_folder
+# from src.pipeline.rotate_right_runner import rotate_right
+# from src.pipeline.remove_lines_runner import remove_lines
+# from src.pipeline.split_pages import split_pages
+# from src.pipeline.quality_classifier_runner import classify_by_quality
 from src.pipeline.process_single_document import process_single_document
 
 # from src.pipeline.config import PipelineConfig

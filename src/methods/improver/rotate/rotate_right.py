@@ -16,7 +16,6 @@ import numpy as np
 from PIL import Image
 from io import BytesIO
 
-# Импортируем PaddleOCR модули
 from paddleocr import PaddleOCR, DocImgOrientationClassification
 
 from src.pipeline.config import PipelineConfig
@@ -60,15 +59,12 @@ class RightAngleRotation:
             return None
     
     def _detect_rotation_doc_orientation(self, page_image):
-        """Определение поворота с помощью DocImgOrientationClassification"""
         try:
-            # Конвертируем PIL Image в numpy array
             if isinstance(page_image, Image.Image):
                 img_array = np.array(page_image)
             else:
                 img_array = page_image
             
-            # Используем DocImgOrientationClassification для определения ориентации
             results = self.orientation_classifier.predict(img_array, batch_size=1)
             
             if results and len(results) > 0:
@@ -132,13 +128,11 @@ class RightAngleRotation:
             return 0.0
             
         try:
-            # Конвертируем PIL Image в numpy array для PaddleOCR
             if isinstance(img, Image.Image):
                 img_array = np.array(img)
             else:
                 img_array = img
-            
-            # Используем PaddleOCR для получения уверенности распознавания
+
             result = self.ocr.ocr(img_array)
             return self._calculate_confidence_paddleocr(result)
             
@@ -152,18 +146,13 @@ class RightAngleRotation:
         return conf_rot180 > conf_normal
 
     def _init_orientation_classifier(self) -> None:
-        device_candidates = []
-        if self._gpu_requested:
-            device_candidates.append("gpu")
-        device_candidates.append("cpu")
-
-        for dev in device_candidates:
+        for dev in self._device_candidates():
             try:
                 self.orientation_classifier = DocImgOrientationClassification(
                     model_name="PP-LCNet_x1_0_doc_ori",
                     device=dev,
                 )
-                if dev == "gpu":
+                if dev.startswith("gpu"):
                     print("[INFO] DocImgOrientationClassification запущен на GPU")
                 else:
                     if self._gpu_requested:
@@ -176,27 +165,22 @@ class RightAngleRotation:
         self.orientation_classifier = None
 
     def _init_paddle_ocr(self, lang: str) -> None:
-        ocr_candidates = []
-        if self._gpu_requested:
-            ocr_candidates.append(True)
-        ocr_candidates.append(False)
-
-        for use_gpu in ocr_candidates:
+        for device in self._device_candidates():
             try:
                 self.ocr = PaddleOCR(
                     lang=lang,
                     use_textline_orientation=False,
                     use_doc_orientation_classify=False,
                     use_doc_unwarping=False,
-                    use_gpu=use_gpu,
+                    device=device,
                 )
-                mode = "GPU" if use_gpu else "CPU"
+                mode = device.upper()
                 print(f"[INFO] PaddleOCR инициализирован ({mode})")
-                if not use_gpu:
+                if not device.startswith("gpu"):
                     self._gpu_requested = False
                 return
             except Exception as e:
-                print(f"[WARNING] PaddleOCR не удалось запустить на {'GPU' if use_gpu else 'CPU'}: {e}")
+                print(f"[WARNING] PaddleOCR не удалось запустить на {device.upper()}: {e}")
         print("[ERROR] PaddleOCR недоступен – будет использоваться упрощённая логика")
         self.ocr = None
 
@@ -213,6 +197,32 @@ class RightAngleRotation:
     def _should_use_gpu(device: str) -> bool:
         val = device.lower()
         return val.startswith("cuda") or val.startswith("gpu")
+
+    def _gpu_device_token(self) -> str:
+        """
+        Приводим пользовательское значение (например, cuda:0) к ожидаемому Paddle виду (gpu:0)
+        """
+        pref = (self.device_preference or "").strip().lower()
+        if pref.startswith("cuda"):
+            return "gpu" + pref[4:]
+        if pref.startswith("gpu"):
+            return pref
+        return "gpu"
+
+    def _device_candidates(self) -> list[str]:
+        candidates: list[str] = []
+        seen = set()
+
+        if self._gpu_requested:
+            gpu_dev = self._gpu_device_token()
+            if gpu_dev not in seen:
+                candidates.append(gpu_dev)
+                seen.add(gpu_dev)
+
+        if "cpu" not in seen:
+            candidates.append("cpu")
+
+        return candidates
 
     def render_rotated_page_as_image(self, input_pdf, output_pdf, angle):
         try:
