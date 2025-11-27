@@ -12,7 +12,7 @@ ocrmypdf==16.11.0
 img2pdf==0.6.1
 pypdf==6.1.0
 python-dotenv==1.1.1
-paddlepaddle-gpu==3.2.0
+paddlepaddle==3.2.0
 paddleocr==3.2.0
 easyocr==1.7.2
 ultralytics==8.3.205
