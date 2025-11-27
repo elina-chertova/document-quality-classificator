@@ -10,6 +10,8 @@ from paddleocr import PaddleOCR
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from PIL import Image
 
+from src.pipeline.config import PipelineConfig
+
 
 @dataclass
 class ExtendedPDFQualityResult:
@@ -76,14 +78,14 @@ class ExtendedPDFQualityAssessor:
                 lang = "ch"  # PaddleOCR использует "ch" для китайского, который поддерживает русский
             else:
                 lang = "en"
-            
+
             self.ocr = PaddleOCR(
                 lang=lang,
                 use_textline_orientation=False,
                 use_doc_orientation_classify=False,
-                use_doc_unwarping=False
+                use_doc_unwarping=False,
             )
-            self.on_log("[INFO] PaddleOCR инициализирован для расширенной классификации качества")
+            self.on_log(f"[INFO] PaddleOCR инициализирован (lang={lang})")
         except Exception as e:
             self.on_log(f"[WARNING] Ошибка инициализации PaddleOCR: {e}")
             self.ocr = None

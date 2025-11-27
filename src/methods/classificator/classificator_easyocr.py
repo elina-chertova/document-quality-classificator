@@ -76,6 +76,13 @@ class PDFQualityAssessorEasyOCR:
         self.skew_warn_deg = float(skew_warn_deg)
         self.device_preference = self._resolve_device(device)
         self._use_gpu = self._should_use_gpu(self.device_preference)
+        if self._use_gpu and not self._is_cuda_available():
+            self.on_log(
+                f"[WARNING] CUDA недоступна на этой системе, EasyOCR переключён на CPU "
+                f"(запрошено: {self.device_preference})"
+            )
+            self._use_gpu = False
+            self.device_preference = "cpu"
         self.on_log(f"[INFO] EasyOCR device preference: {self.device_preference} (gpu={self._use_gpu})")
         
         # Инициализация EasyOCR
@@ -249,6 +256,14 @@ class PDFQualityAssessorEasyOCR:
     def _should_use_gpu(device: str) -> bool:
         val = device.lower()
         return val.startswith("cuda") or val.startswith("gpu")
+
+    @staticmethod
+    def _is_cuda_available() -> bool:
+        try:
+            import torch  # type: ignore
+            return bool(getattr(torch.cuda, "is_available", lambda: False)())
+        except Exception:
+            return False
 
     def _ocr_metrics_easyocr(self, image: Image.Image) -> Tuple[float, float, float, int]:
         if not self.reader:

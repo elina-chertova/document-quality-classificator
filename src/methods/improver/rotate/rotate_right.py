@@ -172,10 +172,9 @@ class RightAngleRotation:
                     use_textline_orientation=False,
                     use_doc_orientation_classify=False,
                     use_doc_unwarping=False,
-                    device=device,
                 )
                 mode = device.upper()
-                print(f"[INFO] PaddleOCR инициализирован ({mode})")
+                print(f"[INFO] PaddleOCR инициализирован (ожидали {mode})")
                 if not device.startswith("gpu"):
                     self._gpu_requested = False
                 return
