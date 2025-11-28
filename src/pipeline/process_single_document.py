@@ -92,7 +92,7 @@ def process_single_document(
         output_dir=text_enhanced_dir,
         skip_filenames=dark_filenames
     )
-
+    return text_enhanced_dir
     # print("\n7. Сравнение OCR до/после text enhancer...")
     # comparison_csv_path = os.path.join(output_base_dir, f"{document_name}_text_enhancement_quality.csv")
     # comparison_results = compare_folder(
@@ -104,79 +104,79 @@ def process_single_document(
     # ) or []
 
     # contrast_enhanced_dir=lightened_combined_dir
-    
-    print("\n8. Классификация документов...")
-    class_dpi = classifier_dpi if classifier_dpi is not None else min(dpi, 300)
-    assessor = PDFQualityAssessorEasyOCR(
-        dpi=class_dpi,
-        copy_to_dirs=False,
-        max_workers=max_workers,
-    )
-    
-    results = []
-    files = sorted([f for f in os.listdir(text_enhanced_dir) if f.lower().endswith('.pdf')])
-    
-    for fname in files:
-        pdf_path = os.path.join(text_enhanced_dir, fname)
-        try:
-            result = assessor.assess_pdf(pdf_path)
-
-            page_num = fname.replace('.pdf', '').split('_page_')[-1] if '_page_' in fname else '1'
-            results.append({
-                'document': document_name,
-                'page': page_num,
-                'category': result.category,
-                'reason': result.reason,
-                'confidence': result.median_ocr_conf,
-                'words': result.words_count,
-            })
-            print(f"   {fname} → {result.category.upper()}")
-        except Exception as e:
-            print(f"   [ОШИБКА] {fname}: {e}")
-            page_num = fname.replace('.pdf', '').split('_page_')[-1] if '_page_' in fname else '1'
-            results.append({
-                'document': document_name,
-                'page': page_num,
-                'category': 'error',
-                'reason': str(e),
-                'confidence': 0.0,
-                'words': 0,
-            })
-    
-    print(f"\n9. Сохранение результатов в CSV...")
-    os.makedirs(os.path.dirname(output_csv_path), exist_ok=True)
-    
-    with open(output_csv_path, 'w', newline='', encoding='utf-8') as csvfile:
-        fieldnames = ['document', 'page', 'category', 'reason', 'confidence', 'words']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(results)
-    
-    print(f"   Результаты сохранены: {output_csv_path}")
-
-    print(f"\n10. Сборка страниц в итоговый PDF...")
-    final_dir = os.path.join(output_base_dir, "final_documents")
-    merged_pdf_path = os.path.join(final_dir, f"{document_name}.pdf")
-    combined_ok = _merge_pages_to_pdf(text_enhanced_dir, merged_pdf_path)
-    if combined_ok:
-        print(f"   Итоговый документ сохранён: {merged_pdf_path}")
-    else:
-        print("   [ПРЕДУПРЕЖДЕНИЕ] Не удалось собрать итоговый PDF (страницы отсутствуют?)")
-    
-    print("\n" + "=" * 60)
-    print("ОБРАБОТКА ЗАВЕРШЕНА")
-    print("=" * 60)
-    print(f"Всего страниц: {len(results)}")
-    
-    category_counts = {}
-    for r in results:
-        cat = r['category']
-        category_counts[cat] = category_counts.get(cat, 0) + 1
-    
-    for cat, count in sorted(category_counts.items()):
-        print(f"  {cat}: {count}")
-    
-    return results
+    #
+    # print("\n8. Классификация документов...")
+    # class_dpi = classifier_dpi if classifier_dpi is not None else min(dpi, 300)
+    # assessor = PDFQualityAssessorEasyOCR(
+    #     dpi=class_dpi,
+    #     copy_to_dirs=False,
+    #     max_workers=max_workers,
+    # )
+    #
+    # results = []
+    # files = sorted([f for f in os.listdir(text_enhanced_dir) if f.lower().endswith('.pdf')])
+    #
+    # for fname in files:
+    #     pdf_path = os.path.join(text_enhanced_dir, fname)
+    #     try:
+    #         result = assessor.assess_pdf(pdf_path)
+    #
+    #         page_num = fname.replace('.pdf', '').split('_page_')[-1] if '_page_' in fname else '1'
+    #         results.append({
+    #             'document': document_name,
+    #             'page': page_num,
+    #             'category': result.category,
+    #             'reason': result.reason,
+    #             'confidence': result.median_ocr_conf,
+    #             'words': result.words_count,
+    #         })
+    #         print(f"   {fname} → {result.category.upper()}")
+    #     except Exception as e:
+    #         print(f"   [ОШИБКА] {fname}: {e}")
+    #         page_num = fname.replace('.pdf', '').split('_page_')[-1] if '_page_' in fname else '1'
+    #         results.append({
+    #             'document': document_name,
+    #             'page': page_num,
+    #             'category': 'error',
+    #             'reason': str(e),
+    #             'confidence': 0.0,
+    #             'words': 0,
+    #         })
+    #
+    # print(f"\n9. Сохранение результатов в CSV...")
+    # os.makedirs(os.path.dirname(output_csv_path), exist_ok=True)
+    #
+    # with open(output_csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+    #     fieldnames = ['document', 'page', 'category', 'reason', 'confidence', 'words']
+    #     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    #     writer.writeheader()
+    #     writer.writerows(results)
+    #
+    # print(f"   Результаты сохранены: {output_csv_path}")
+    #
+    # print(f"\n10. Сборка страниц в итоговый PDF...")
+    # final_dir = os.path.join(output_base_dir, "final_documents")
+    # merged_pdf_path = os.path.join(final_dir, f"{document_name}.pdf")
+    # combined_ok = _merge_pages_to_pdf(text_enhanced_dir, merged_pdf_path)
+    # if combined_ok:
+    #     print(f"   Итоговый документ сохранён: {merged_pdf_path}")
+    # else:
+    #     print("   [ПРЕДУПРЕЖДЕНИЕ] Не удалось собрать итоговый PDF (страницы отсутствуют?)")
+    #
+    # print("\n" + "=" * 60)
+    # print("ОБРАБОТКА ЗАВЕРШЕНА")
+    # print("=" * 60)
+    # print(f"Всего страниц: {len(results)}")
+    #
+    # category_counts = {}
+    # for r in results:
+    #     cat = r['category']
+    #     category_counts[cat] = category_counts.get(cat, 0) + 1
+    #
+    # for cat, count in sorted(category_counts.items()):
+    #     print(f"  {cat}: {count}")
+    #
+    # return results
 
 
 def _merge_pages_to_pdf(source_dir: str, output_pdf_path: str) -> bool:

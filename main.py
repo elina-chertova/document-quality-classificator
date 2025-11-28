@@ -3,7 +3,9 @@
 """
 
 import sys
+from pathlib import Path
 
+from src.pipeline.classify_single_document import classify_single_document
 # from src.pipeline.dark_docs_to_light import dark_documents_to_light
 # from src.pipeline.deskew import deskew_documents
 # from src.pipeline.fast_version.process_single_document_fast import process_single_document_fast
@@ -59,10 +61,28 @@ def main():
     # )
     # doc01753420250721150145_page_13
     # Scan_20250213_120013
-    process_single_document(
-        input_pdf_path='/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf',
-        output_base_dir='/Users/elinacertova/Downloads/single_doc_test/output',
-        output_csv_path='/Users/elinacertova/Downloads/single_doc_test/results.csv'
+
+    input_pdf_path = '/Users/elinacertova/PycharmProjects/document-quality-classificator/data_example/Договор_купли_продажи_недвижимого_имущества_пример_2025_для_двух.pdf'
+    output_base_dir = '/Users/elinacertova/Downloads/single_doc_test/output1'
+    output_csv_path = '/Users/elinacertova/Downloads/single_doc_test/results.csv'
+    pages_dir = process_single_document(
+    #     input_pdf_path='/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf',
+        input_pdf_path=input_pdf_path,
+        output_base_dir=output_base_dir,
+        output_csv_path=output_csv_path
+    )
+
+
+    document_name = Path(input_pdf_path).stem
+
+    results = classify_single_document(
+        pages_dir=pages_dir,
+        document_name=document_name,
+        output_base_dir=output_base_dir,
+        output_csv_path=output_csv_path,
+        dpi=400,
+        max_workers=4,
+        classifier_dpi=300,
     )
     
     # process_single_document_fastest(
