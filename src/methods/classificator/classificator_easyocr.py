@@ -1,7 +1,3 @@
-"""
-Классификатор качества PDF с использованием EasyOCR вместо pytesseract
-"""
-
 import os
 import shutil
 from dataclasses import dataclass
@@ -9,7 +5,12 @@ from typing import Callable, List, Optional, Tuple
 
 import cv2
 import numpy as np
-from pdf2image import convert_from_path
+try:
+    import fitz
+    USE_PYMUPDF = True
+except ImportError:
+    from pdf2image import convert_from_path
+    USE_PYMUPDF = False
 import easyocr
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from PIL import Image
@@ -143,20 +144,22 @@ class PDFQualityAssessorEasyOCR:
     def _blur_score(self, image: Image.Image) -> float:
         gray = self._to_gray(image)
         lap = cv2.Laplacian(gray, cv2.CV_64F)
-        base_score = float(lap.var())
-
-        _, mask = cv2.threshold(
-            gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
-        )
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8), iterations=1)
-        mask_bool = mask > 0
-
-        if np.any(mask_bool):
-            focused = lap[mask_bool]
-            focus_score = float(focused.var())
-            return max(base_score, focus_score)
-
-        return base_score
+        return float(lap.var())
+    
+    # def _blur_score_with_mask(self, image: Image.Image) -> float:
+    #     gray = self._to_gray(image)
+    #     lap = cv2.Laplacian(gray, cv2.CV_64F)
+    #     base_score = float(lap.var())
+    #     _, mask = cv2.threshold(
+    #         gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+    #     )
+    #     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8), iterations=1)
+    #     mask_bool = mask > 0
+    #     if np.any(mask_bool):
+    #         focused = lap[mask_bool]
+    #         focus_score = float(focused.var())
+    #         return max(base_score, focus_score)
+    #     return base_score
 
     def _text_density(self, image: Image.Image) -> float:
         gray = self._to_gray(image)
@@ -310,22 +313,27 @@ class PDFQualityAssessorEasyOCR:
                     density: float, roi_frac: float, avg_skew_deg: float,
                     is_table: bool, core_frac: float) -> Tuple[str, str]:
         if roi_frac < self.min_roi_area_frac:
-            return "trash", "roi<min"
+            return "failed", "roi<min"
         if avg_skew_deg >= self.skew_bad_deg:
-            return "trash", "skew_bad"
+            return "failed", "skew_bad"
 
         if conf_med >= 95 and pct80 >= 0.90:
             if blur >= max(200, self.blur_low * 0.25):
                 return "good", "text_strong_confident"
+            if words < 20:
+                if blur >= 50:
+                    return "good", "text_strong_confident_sparse"
+                else:
+                    return "failed", "sparse_text_poor_blur"
             return "medium", "text_confident_low_blur"
 
         if words < 10 and conf_med < 10 and pct80 < 0.05:
-            return "trash", "ocr_dead"
+            return "failed", "ocr_dead"
         if blur < 120 and pct80 < 0.10:
-            return "trash", "blur_dead"
+            return "failed", "blur_dead"
 
         if core_frac < 0.12 and pct80 < 0.15 and blur < 260 and conf_med < 20:
-            return "trash", "miniature_poor"
+            return "failed", "miniature_poor"
 
         if is_table:
             if conf_med >= 40 and pct80 >= 0.20 and blur >= 800 and words >= 50:
@@ -350,7 +358,22 @@ class PDFQualityAssessorEasyOCR:
 
     def assess_pdf(self, pdf_path: str) -> PDFQualityResult:
         try:
-            pages = convert_from_path(pdf_path, dpi=self.dpi)
+            Image.MAX_IMAGE_PIXELS = None
+            
+            if USE_PYMUPDF:
+                doc = fitz.open(pdf_path)
+                zoom = self.dpi / 72
+                mat = fitz.Matrix(zoom, zoom)
+                pages = []
+                for page_num in range(len(doc)):
+                    page = doc.load_page(page_num)
+                    pix = page.get_pixmap(matrix=mat)
+                    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                    pages.append(img)
+                doc.close()
+            else:
+                pages = convert_from_path(pdf_path, dpi=self.dpi)
+            
             if not pages:
                 raise RuntimeError("PDF has 0 pages")
 
@@ -360,10 +383,8 @@ class PDFQualityAssessorEasyOCR:
             core_fracs: List[float] = []
             skew_degs: List[float] = []
             table_flags: List[bool] = []
-            conf_med_scores: List[float] = []
-            conf_mean_scores: List[float] = []
-            pct80_scores: List[float] = []
-            words_scores: List[int] = []
+            
+            ocr_ready_images = []
 
             for page in pages:
                 roi_img, roi_frac = self._crop_roi(page)
@@ -374,6 +395,14 @@ class PDFQualityAssessorEasyOCR:
                 skew_degs.append(self._estimate_skew_deg(roi_img))
                 table_flags.append(self._is_table_like(roi_img))
                 ocr_ready = self._prep_for_ocr(roi_img)
+                ocr_ready_images.append(ocr_ready)
+            
+            conf_med_scores: List[float] = []
+            conf_mean_scores: List[float] = []
+            pct80_scores: List[float] = []
+            words_scores: List[int] = []
+            
+            for ocr_ready in ocr_ready_images:
                 mconf, meanconf, p80, words = self._ocr_metrics_easyocr(ocr_ready)
                 conf_med_scores.append(mconf)
                 conf_mean_scores.append(meanconf)
@@ -434,7 +463,7 @@ class PDFQualityAssessorEasyOCR:
             self.on_log(f"[FAILED] {os.path.basename(pdf_path)} → {err}")
             return PDFQualityResult(
                 pdf_path=pdf_path,
-                category="trash",
+                category="failed",
                 reason=err,
                 avg_blur=0.0,
                 median_ocr_conf=0.0,
