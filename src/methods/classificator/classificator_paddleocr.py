@@ -35,8 +35,8 @@ class PDFQualityAssessorPaddleOCR:
     def __init__(
         self,
         dpi: int = 400,
-        paddle_lang: str = "ch",  # PaddleOCR поддерживает русский через 'ch'
-        blur_low: float = 300.0,
+        paddle_lang: str = "ru",
+        blur_low: float = 800.0,
         copy_to_dirs: bool = True,
         on_log: Optional[Callable[[str], None]] = None,
         max_workers: Optional[int] = None,
@@ -44,7 +44,6 @@ class PDFQualityAssessorPaddleOCR:
         min_roi_area_frac: float = 0.45,
         skew_bad_deg: float = 12.0,
         skew_warn_deg: float = 7.0,
-        min_words_for_text_quality: int = 20,
     ):
         self.dpi = int(dpi)
         self.paddle_lang = paddle_lang
@@ -56,7 +55,6 @@ class PDFQualityAssessorPaddleOCR:
         self.min_roi_area_frac = float(min_roi_area_frac)
         self.skew_bad_deg = float(skew_bad_deg)
         self.skew_warn_deg = float(skew_warn_deg)
-        self.min_words_for_text_quality = int(min_words_for_text_quality)
 
         self.ocr = None
         try:
@@ -174,6 +172,8 @@ class PDFQualityAssessorPaddleOCR:
         return area / float(h * w)
 
     def _prep_for_ocr(self, image: Image.Image) -> Image.Image:
+        Image.MAX_IMAGE_PIXELS = None
+        
         im = image
         W, H = im.size
         long_side = max(W, H)
@@ -189,48 +189,47 @@ class PDFQualityAssessorPaddleOCR:
         return Image.fromarray(thr)
 
     def _ocr_metrics_paddleocr(self, image: Image.Image) -> Tuple[float, float, float, int]:
-        """Замена pytesseract на PaddleOCR для получения OCR метрик"""
+        if not self.ocr:
+            return 0.0, 0.0, 0.0, 0
+        
         try:
-            # Конвертируем PIL Image в numpy array для PaddleOCR
             img_array = np.array(image)
             
-            # Выполняем OCR используя ocr метод
-            try:
-                results = self.ocr.ocr(img_array)
-            except ValueError as ve:
-                if "not enough values to unpack" in str(ve):
-                    # Ошибка внутри PaddleOCR - возвращаем нули
-                    return 0.0, 0.0, 0.0, 0
-                raise
+            results = self.ocr.ocr(img_array, cls=False)
             
             if not results or not results[0]:
                 return 0.0, 0.0, 0.0, 0
             
-            # results[0] - это OCRResult объект (dict-like)
-            result = results[0]
+            detections = results[0]
             
-            # Получаем тексты и confidence scores
-            rec_texts = result.get('rec_texts', []) if hasattr(result, 'get') else getattr(result, 'rec_texts', [])
-            rec_scores = result.get('rec_scores', []) if hasattr(result, 'get') else getattr(result, 'rec_scores', [])
-            
-            if not rec_texts and not rec_scores:
+            if not detections:
                 return 0.0, 0.0, 0.0, 0
             
-            # Подсчитываем слова и confidence
             confs = []
             words = 0
             
-            for i, score in enumerate(rec_scores):
-                if score > 0:
-                    confs.append(float(score))
-                    # Проверяем соответствующий текст
-                    if i < len(rec_texts) and isinstance(rec_texts[i], str) and rec_texts[i].strip():
-                        words += 1
+            for detection in detections:
+                if detection is None:
+                    continue
+                
+                if len(detection) >= 2:
+                    text_info = detection[1]
+                    if isinstance(text_info, (tuple, list)) and len(text_info) >= 2:
+                        text = text_info[0]
+                        confidence = text_info[1]
+                        
+                        # PaddleOCR возвращает confidence в диапазоне 0-1
+                        if isinstance(confidence, (int, float)) and confidence > 0:
+                            conf_percent = float(confidence * 100)  # Конвертируем в проценты
+                            confs.append(conf_percent)
+                            
+                            # Считаем слова
+                            if isinstance(text, str) and text.strip():
+                                words += 1
             
             if not confs:
                 return 0.0, 0.0, 0.0, 0
             
-            # Вычисляем метрики аналогично pytesseract
             med = float(np.median(confs))
             mean = float(np.mean(confs))
             p80 = float(sum(c >= 80 for c in confs)) / float(len(confs))
@@ -244,39 +243,49 @@ class PDFQualityAssessorPaddleOCR:
     def _categorize(self, blur: float, conf_med: float, pct80: float, words: int,
                     density: float, roi_frac: float, avg_skew_deg: float,
                     is_table: bool, core_frac: float) -> Tuple[str, str]:
-        # Жёсткий мусор — только по реальным фаталкам, без завязки на "мало слов"
         if roi_frac < self.min_roi_area_frac:
             return "trash", "roi<min"
         if avg_skew_deg >= self.skew_bad_deg:
             return "trash", "skew_bad"
-        if conf_med < 25 and pct80 < 0.10:
+
+        if conf_med >= 95 and pct80 >= 0.90:
+            if blur >= max(200, self.blur_low * 0.25):
+                return "good", "text_strong_confident"
+            return "medium", "text_confident_low_blur"
+
+        if words < 10 and conf_med < 10 and pct80 < 0.05:
             return "trash", "ocr_dead"
-        if blur < 120 and pct80 < 0.20:
+        if blur < 120 and pct80 < 0.10:
             return "trash", "blur_dead"
-        if core_frac < 0.12 and pct80 < 0.25 and blur < 260 and conf_med < 55:
+
+        if core_frac < 0.12 and pct80 < 0.15 and blur < 260 and conf_med < 20:
             return "trash", "miniature_poor"
 
         if is_table:
-            if conf_med >= 65 and pct80 >= 0.45 and blur >= 800:
+            if conf_med >= 40 and pct80 >= 0.20 and blur >= 800 and words >= 50:
                 return "good", "table_strong"
-            if conf_med >= 55 and pct80 >= 0.30 and blur >= 220:
+            if conf_med >= 20 and pct80 >= 0.08 and blur >= 220 and words >= 20:
                 return "medium", "table_ok"
+            if words >= 30:
+                return "medium", "table_readable"
             return "failed", "table_weak"
 
-        if conf_med >= 90 and pct80 >= 0.55 and blur >= self.blur_low:
+        if conf_med >= 60 and pct80 >= 0.30 and blur >= self.blur_low:
             return "good", "text_strong"
-        if conf_med >= 70 and pct80 >= 0.35:
+        if conf_med >= 35 and pct80 >= 0.15 and blur >= 400 and words >= 30:
+            return "medium", "text_good"
+        if conf_med >= 20 and pct80 >= 0.08 and blur >= 200 and words >= 20:
             return "medium", "text_ok"
-
-        if words < self.min_words_for_text_quality:
-            if conf_med >= 55 and pct80 >= 0.25 and blur >= 220:
-                return "medium", "text_sparse_ok"
-            return "failed", "text_sparse_weak"
+        
+        if words >= 50:
+            return "medium", "text_readable"
 
         return "failed", "text_weak"
 
     def assess_pdf(self, pdf_path: str) -> PDFQualityResult:
         try:
+            Image.MAX_IMAGE_PIXELS = None
+            
             pages = convert_from_path(pdf_path, dpi=self.dpi)
             if not pages:
                 raise RuntimeError("PDF has 0 pages")
@@ -367,14 +376,14 @@ class PDFQualityAssessorPaddleOCR:
             )
 
     def process_folder(
-        self,
-        input_folder: str,
-        output_folder: Optional[str] = None,
-        medium_subdir: str = "medium_quality",
-        good_subdir: str = "good_quality",
-        failed_subdir: str = "failed",
-        trash_subdir: str = "trash",
-        patterns: Tuple[str, ...] = (".pdf",),
+            self,
+            input_folder: str,
+            output_folder: Optional[str] = None,
+            medium_subdir: str = "medium_quality",
+            good_subdir: str = "good_quality",
+            failed_subdir: str = "failed",
+            trash_subdir: str = "trash",
+            patterns: Tuple[str, ...] = (".pdf",),
     ) -> List[PDFQualityResult]:
         input_folder = os.path.abspath(input_folder)
         output_folder = os.path.abspath(output_folder) if output_folder else None
