@@ -251,9 +251,20 @@ class PDFQualityAssessorEasyOCR:
         if preferred and preferred.strip():
             return preferred.strip()
         try:
-            return PipelineConfig().device.summary()
+            config_device = PipelineConfig().device.summary()
+            if config_device and config_device.lower() != "cpu":
+                return config_device
         except Exception:
-            return "cpu"
+            pass
+        
+        try:
+            import torch
+            if torch.cuda.is_available():
+                return "cuda"
+        except Exception:
+            pass
+        
+        return "cpu"
 
     @staticmethod
     def _should_use_gpu(device: str) -> bool:

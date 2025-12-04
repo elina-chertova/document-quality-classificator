@@ -62,8 +62,9 @@ def main():
     # doc01753420250721150145_page_13
     # Scan_20250213_120013
 
-    input_pdf_path = '/Users/elinacertova/PycharmProjects/document-quality-classificator/data_example/Договор_купли_продажи_недвижимого_имущества_пример_2025_для_двух.pdf'
-    output_base_dir = '/Users/elinacertova/Downloads/single_doc_test/output1'
+    # input_pdf_path = '/Users/elinacertova/PycharmProjects/document-quality-classificator/data_example/Договор_купли_продажи_недвижимого_имущества_пример_2025_для_двух.pdf'
+    input_pdf_path = '/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf'
+    output_base_dir = '/Users/elinacertova/Downloads/single_doc_test/output2'
     output_csv_path = '/Users/elinacertova/Downloads/single_doc_test/results.csv'
     pages_dir = process_single_document(
     #     input_pdf_path='/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf',
@@ -71,7 +72,6 @@ def main():
         output_base_dir=output_base_dir,
         output_csv_path=output_csv_path
     )
-
 
     document_name = Path(input_pdf_path).stem
 
@@ -83,6 +83,8 @@ def main():
         dpi=400,
         max_workers=4,
         classifier_dpi=300,
+        device="cpu",
+        optimized=False
     )
     
     # process_single_document_fastest(

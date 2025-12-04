@@ -3,6 +3,9 @@ from PyPDF2 import PdfReader, PdfWriter
 import os
 import csv
 
+from src.methods.classificator.classificator_easyocr_optimized import PDFQualityAssessorEasyOCROptimized
+
+
 def classify_single_document(
     pages_dir: str,
     document_name: str,
@@ -11,6 +14,8 @@ def classify_single_document(
     dpi: int = 400,
     max_workers: int = 4,
     classifier_dpi: int | None = 300,
+    device: str | None = None,
+    optimized: bool = False
 ) -> list[dict]:
     pages_dir = os.path.abspath(pages_dir)
     output_base_dir = os.path.abspath(output_base_dir)
@@ -18,11 +23,20 @@ def classify_single_document(
 
     print("\n8. Классификация документов...")
     class_dpi = classifier_dpi if classifier_dpi is not None else min(dpi, 300)
-    assessor = PDFQualityAssessorEasyOCR(
-        dpi=class_dpi,
-        copy_to_dirs=False,
-        max_workers=max_workers,
-    )
+    if optimized:
+        assessor = PDFQualityAssessorEasyOCROptimized(
+            dpi=class_dpi,
+            copy_to_dirs=False,
+            max_workers=max_workers,
+            device=device,
+        )
+    else:
+        assessor = PDFQualityAssessorEasyOCR(
+            dpi=class_dpi,
+            copy_to_dirs=False,
+            max_workers=max_workers,
+            device=device,
+        )
 
     results: list[dict] = []
     files = sorted(f for f in os.listdir(pages_dir) if f.lower().endswith(".pdf"))

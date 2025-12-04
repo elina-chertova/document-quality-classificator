@@ -82,13 +82,31 @@ classify_by_quality(input_folder='/Users/elinacertova/Downloads/dataset_tester_d
 Ненужные модули можно закомментировать в коде в process_single_document.
 Результаты сохраняются в CSV файл.
 ```python
+from pathlib import Path
+from src.pipeline.classify_single_document import classify_single_document
 from src.pipeline.process_single_document import process_single_document
 
 
-process_single_document(
-    input_pdf_path='/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf',
-    output_base_dir='/Users/elinacertova/Downloads/single_doc_test/output',
-    output_csv_path='/Users/elinacertova/Downloads/single_doc_test/results.csv'
+input_pdf_path = '/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf'
+output_base_dir = '/Users/elinacertova/Downloads/single_doc_test/output2'
+output_csv_path = '/Users/elinacertova/Downloads/single_doc_test/results.csv'
+pages_dir = process_single_document(
+  input_pdf_path=input_pdf_path,
+  output_base_dir=output_base_dir,
+  output_csv_path=output_csv_path
+)
+
+document_name = Path(input_pdf_path).stem
+
+results = classify_single_document(
+    pages_dir=pages_dir,
+    document_name=document_name,
+    output_base_dir=output_base_dir,
+    output_csv_path=output_csv_path,
+    dpi=400,
+    max_workers=4,
+    classifier_dpi=300,
+    optimized=False
 )
 ```
 
