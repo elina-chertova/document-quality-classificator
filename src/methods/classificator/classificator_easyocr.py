@@ -33,8 +33,7 @@ class PDFQualityResult:
     core_frac: float
     is_table_like: bool
     avg_skew_deg: float
-    
-    # Расширенные метрики (для совместимости с ExtendedPDFQualityResult)
+
     bbox_area_text_frac: float = 0.0
     conf_iqr: float = 0.0
     line_height_med: float = 0.0
@@ -85,10 +84,8 @@ class PDFQualityAssessorEasyOCR:
             self._use_gpu = False
             self.device_preference = "cpu"
         self.on_log(f"[INFO] EasyOCR device preference: {self.device_preference} (gpu={self._use_gpu})")
-        
-        # Инициализация EasyOCR
+
         try:
-            # Определяем языки для EasyOCR
             langs = []
             if "rus" in tesseract_lang.lower():
                 langs.append('ru')
@@ -486,7 +483,7 @@ class PDFQualityAssessorEasyOCR:
                 core_frac=0.0,
                 is_table_like=False,
                 avg_skew_deg=0.0,
-                # Расширенные метрики (нулевые значения)
+
                 bbox_area_text_frac=0.0,
                 conf_iqr=0.0,
                 line_height_med=0.0,

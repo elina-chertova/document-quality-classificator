@@ -109,8 +109,103 @@ results = classify_single_document(
     optimized=False
 )
 ```
+## Пайплайн `Классификация -> improver`
+```python
+from src.pipeline.process_single_document_smart import process_single_document_smart
+
+results = process_single_document_smart(
+    input_pdf_path="/Scan_20250213_120013.pdf",
+    output_base_dir="/single_doc_test/output3",
+    output_csv_path="results.csv",
+    dpi=400,
+    max_workers=4,
+    classifier_dpi=300,
+    device="gpu",
+    optimized=False
+)
+```
+
+## Классификация с использованием ML
+### Подготовка данных для обучения
+Папка `/classific_testing` должна содержать размеченные заранее данные формата
+- `/classific_testing/failed`
+- `/classific_testing/medium`
+- `/classific_testing/good`
+
+с постраничными документами внутри.
+```python
+from src.pipeline.training.create_training_data import create_training_data
 
 
+create_training_data(
+    input_base_dir="/classific_testing",
+    output_csv_path="classification_analysis.csv",
+    device="gpu"
+)
+```
+### Обучение
+```python
+from src.pipeline.training.tune_extended_classifier import tune_extended_classifier
+
+
+result = tune_extended_classifier(
+    csv_path="classification_analysis.csv",
+    model_path="final_quality_classifier_model.pkl",
+)
+
+if 'error' in result:
+    print(f"Ошибка: {result['error']}")
+else:
+    print(f"\nЛучший метод: {result['best_method']}, точность: {result['best_accuracy']:.4f}")
+```
+
+### Инференс
+```python
+from src.pipeline.training.inference_quality import predict_quality_for_pdf_pages
+
+results = predict_quality_for_pdf_pages(
+    pdf_path="Договор_купли_продажи_недвижимого_имущества_пример_2025_для_двух.pdf",
+    model_path="final_quality_classifier_model.pkl",
+    dpi=400,
+    device="gpu",
+)
+
+print(f"Файл: {results[0]['file']}")
+print(f"Всего страниц: {len(results)}\n")
+
+for r in results:
+    print(f"Страница {r['page']}: {r['predicted'].upper()}")
+    print(f"  Вероятности: {r['proba']}")
+    print(f"  OCR confidence: {r['median_ocr_conf']:.1f}, blur: {r['avg_blur']:.1f}, words: {r['words_count']}")
+    print()
+```
+
+
+## Детекция печатей в папке
+```python
+from src.methods.detector import detect_stamps_folder
+
+summary = detect_stamps_folder(
+    input_folder="documents/",
+    conf_threshold=0.8,
+    recursive=False,
+)
+print(f"Обработано: {summary['total_images']}, найдено печатей: {summary['total_stamps']}")
+```
+
+### Затирание печатей (анонимизация документов)
+```python
+from src.methods.detector import remove_stamps_from_image, remove_stamps_from_folder
+
+# Одно изображение - автоматически детектирует и затирает печати
+result = remove_stamps_from_image("document.pdf")
+print(f"Затерто печатей: {result['num_stamps']}")
+print(f"Очищенный PDF: {result['cleaned_pdf_path']}")
+
+# Папка - массовое затирание
+summary = remove_stamps_from_folder("documents/", recursive=True)
+print(f"Обработано: {summary['total_images']}, затерто: {summary['total_stamps']}")
+```
 # ----------------------------------------
 ## Протестируйте до этого момента 
 # ----------------------------------------
@@ -153,15 +248,7 @@ run_cer(
 )
 ```
 
-### Перебор параметров и CER (quality sweep) - пока не тестировать
-```python
-from src.pipeline.quality_sweep import run_quality_sweep
-run_quality_sweep(
-    input_dir="/path/to/input_pdfs",    # папка с PDF
-    refs_dir="/path/to/refs_txt",      # эталонные .txt с теми же именами
-    root_dir="/Users/elinacertova/Downloads/documents_dataset",
-)
-```
+
 Результаты: `…/results/sweep/ocrmypdf_*`, для каждой комбинации создаётся `cer.csv` и выводится сводка в stdout.
 
 ### Ключевые файлы и точки входа
@@ -254,23 +341,13 @@ results = assessor.process_folder(
 
 Создаёт `classification_analysis.csv`  ( используются папки`good/medium/failed`):
 ```bash
-python src/pipeline/create_training_data.py
+python src/pipeline/training/create_training_data.py
 ```
 Пути `example_quality_base` и `training_csv_path` берутся из `config.py`.
 
 ### Тюнинг и сохранение лучшей ML‑модели
 
-Подбирает пороги и ML‑модели, выводит метрики и сохраняет лучшую модель:
-```bash
-python src/pipeline/tune_extended_classifier.py
-```
-Итог сохраняется в `final_quality_classifier_model.pkl` (путь в `config.py → trained_model_path`).
 
-
-### Инференс
-```yaml
-python src/pipeline/inference.py
-```
 
 ### Сравнение pytesseract и Surya
 ```bash
@@ -291,30 +368,4 @@ result = detect_stamps_single(
     visualize=True,
 )
 print(f"Найдено печатей: {result['num_stamps']}")
-```
-
-### Детекция печатей в папке
-```python
-from src.methods.detector import detect_stamps_folder
-
-summary = detect_stamps_folder(
-    input_folder="documents/",
-    conf_threshold=0.8,
-    recursive=False,
-)
-print(f"Обработано: {summary['total_images']}, найдено печатей: {summary['total_stamps']}")
-```
-
-### Затирание печатей (анонимизация документов)
-```python
-from src.methods.detector import remove_stamps_from_image, remove_stamps_from_folder
-
-# Одно изображение - автоматически детектирует и затирает печати
-result = remove_stamps_from_image("document.pdf")
-print(f"Затерто печатей: {result['num_stamps']}")
-print(f"Очищенный PDF: {result['cleaned_pdf_path']}")
-
-# Папка - массовое затирание
-summary = remove_stamps_from_folder("documents/", recursive=True)
-print(f"Обработано: {summary['total_images']}, затерто: {summary['total_stamps']}")
 ```

@@ -1,42 +1,67 @@
-"""
-Создание обучающих данных для классификатора.
-Запускает classificator_extended.py на всех файлах из src/example/quality и сохраняет результаты в CSV.
-"""
 
 import os
-import sys
-import csv
 import pandas as pd
-from pathlib import Path
+from typing import Optional, Callable
 
-from src.pipeline.config import PipelineConfig
+from src.methods.classificator.classificator_easyocr import PDFQualityAssessorEasyOCR
 
 
-def main():
+def create_training_data(
+    input_base_dir: str,
+    output_csv_path: str,
+    dpi: int = 400,
+    blur_low: float = 800.0,
+    min_roi_area_frac: float = 0.45,
+    skew_bad_deg: float = 12.0,
+    skew_warn_deg: float = 7.0,
+    device: Optional[str] = None,
+    max_workers: Optional[int] = 4,
+    on_log: Optional[Callable[[str], None]] = None,
+) -> int:
+    """
+    Создает обучающие данные для классификатора качества документов.
+
+    Args:
+        input_base_dir: Базовая папка, содержащая подпапки 'good', 'medium', 'failed'
+        output_csv_path: Путь для сохранения CSV файла с метриками
+        dpi: DPI для обработки PDF (по умолчанию 400, как в PDFQualityAssessorEasyOCR)
+        blur_low: Минимальный порог размытия (по умолчанию 800.0, как в PDFQualityAssessorEasyOCR)
+        min_roi_area_frac: Минимальная доля области интереса
+        skew_bad_deg: Порог угла наклона (плохой)
+        skew_warn_deg: Порог угла наклона (предупреждение)
+        device: Устройство для OCR (cuda/cpu)
+        max_workers: Количество потоков для параллельной обработки
+        on_log: Функция для логирования (опционально)
+
+    Returns:
+        0 при успехе, 1 при ошибке
+    """
     print("=== СОЗДАНИЕ ОБУЧАЮЩИХ ДАННЫХ ===")
+
     try:
-        from src.methods.classificator.classificator_easyocr import PDFQualityAssessorEasyOCR
         print("✓ Классификатор с EasyOCR загружен")
     except ImportError as e:
         print(f"✗ Ошибка импорта классификатора: {e}")
         return 1
 
     classifier = PDFQualityAssessorEasyOCR(
-        dpi=200,  # Снижаем DPI для стабильности EasyOCR
+        dpi=dpi,
         copy_to_dirs=False,
-        blur_low=300.0,
-        min_roi_area_frac=0.45,
-        skew_bad_deg=12.0,
-        skew_warn_deg=7.0
+        blur_low=blur_low,
+        min_roi_area_frac=min_roi_area_frac,
+        skew_bad_deg=skew_bad_deg,
+        skew_warn_deg=skew_warn_deg,
+        device=device,
+        max_workers=max_workers,
+        on_log=on_log,
     )
 
-    cfg = PipelineConfig()
-    base_path = cfg.paths.example_quality_base
+    base_path = os.path.abspath(input_base_dir)
 
     if not os.path.exists(base_path):
         print(f"✗ Папка не найдена: {base_path}")
         return 1
-    
+
     print(f"✓ Папка найдена: {base_path}")
 
     all_data = []
@@ -45,23 +70,23 @@ def main():
 
     for label in ['failed', 'medium', 'good']:
         label_path = os.path.join(base_path, label)
-        
+
         if not os.path.exists(label_path):
             print(f"⚠ Папка {label} не найдена, пропускаем")
             continue
-        
+
         print(f"\n--- Обрабатываем {label.upper()} ---")
 
         pdf_files = [f for f in os.listdir(label_path) if f.lower().endswith('.pdf')]
         total_files += len(pdf_files)
-        
+
         print(f"Найдено {len(pdf_files)} PDF файлов")
 
         for i, pdf_file in enumerate(pdf_files):
             pdf_path = os.path.join(label_path, pdf_file)
-            
-            print(f"  [{i+1}/{len(pdf_files)}] {pdf_file}...", end=" ")
-            
+
+            print(f"  [{i + 1}/{len(pdf_files)}] {pdf_file}...", end=" ")
+
             try:
                 result = classifier.assess_pdf(pdf_path)
 
@@ -90,15 +115,15 @@ def main():
                     'text_blocks_count': result.text_blocks_count,
                     'avg_block_width': result.avg_block_width,
                     'avg_block_height': result.avg_block_height,
-                    
+
                     'error': result.error or '',
                     'correct': 1 if result.category == label else 0
                 }
-                
+
                 all_data.append(row_data)
                 processed_files += 1
                 print("✓")
-                
+
             except Exception as e:
                 print(f"✗ Ошибка: {e}")
                 error_row = {
@@ -125,31 +150,32 @@ def main():
                     'text_blocks_count': 0,
                     'avg_block_width': 0.0,
                     'avg_block_height': 0.0,
-                    
+
                     'error': str(e),
                     'correct': 0
                 }
                 all_data.append(error_row)
                 processed_files += 1
-    
+
     print(f"\n=== РЕЗУЛЬТАТЫ ===")
     print(f"Всего файлов: {total_files}")
     print(f"Обработано: {processed_files}")
     print(f"Ошибок: {total_files - processed_files}")
-    
+
     if not all_data:
         print("✗ Нет данных для сохранения")
         return 1
 
-    csv_path = cfg.paths.training_csv_path
-    
+    csv_path = os.path.abspath(output_csv_path)
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+
     print(f"\nСохраняем данные в {csv_path}...")
-    
+
     try:
         df = pd.DataFrame(all_data)
 
         df.to_csv(csv_path, index=False, encoding='utf-8')
-        
+
         print(f"✓ Данные сохранены: {len(all_data)} строк")
 
         print(f"\n=== СТАТИСТИКА ===")
@@ -168,14 +194,12 @@ def main():
 
         print(f"\n=== ПЕРВЫЕ 5 СТРОК ===")
         print(df.head().to_string())
-        
+
         print(f"\n✓ Готово! CSV файл создан: {csv_path}")
         return 0
-        
+
     except Exception as e:
         print(f"✗ Ошибка сохранения: {e}")
         return 1
 
-if __name__ == "__main__":
-    exit_code = main()
-    sys.exit(exit_code)
+

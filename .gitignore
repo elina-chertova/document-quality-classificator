@@ -3,3 +3,5 @@
 /src/documents_dataset/
 /.env
 /experiments/
+/src/pipeline/training/tune_extended_classifier_0_74.py
+/src/pipeline/fast_version/

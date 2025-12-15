@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from src.pipeline.classify_single_document import classify_single_document
+from src.pipeline.compare_binarization_ocr import compare_binarization_ocr
 # from src.pipeline.dark_docs_to_light import dark_documents_to_light
 # from src.pipeline.deskew import deskew_documents
 # from src.pipeline.fast_version.process_single_document_fast import process_single_document_fast
@@ -19,89 +20,65 @@ from src.pipeline.process_single_document import process_single_document
 # from src.pipeline.config import PipelineConfig
 
 
-# def main(root_dir: str | None = None, full_dateset_dir: str | None = None):
-#     cfg = PipelineConfig()
-#     if root_dir:
-#         cfg.paths.root_dir = root_dir
-#     split_pages(root_dir=cfg.paths.root_dir, full_dateset_dir=full_dateset_dir)
-#     rotate_right(root_dir=cfg.paths.root_dir)
-#     deskew_documents(root_dir=cfg.paths.root_dir)
-#     # remove_lines(root_dir=cfg.paths.root_dir, log_csv=None)
-#     # dark_documents_to_light()
-
 def main():
 
-    # split_pages(input_dir="/Users/elinacertova/Downloads/dataset_tester_full/docs", output_dir="/Users/elinacertova/Downloads/dataset_tester_full/splitted")
-    # rotate_right(input_dir='/Users/elinacertova/Downloads/dataset_tester_full/splitted',
-    #              output_dir='/Users/elinacertova/Downloads/dataset_tester_full/rotated',
-    #              failed_dir='/Users/elinacertova/Downloads/dataset_tester_full/failed')
-    # deskew_documents(input_dir='/Users/elinacertova/Downloads/dataset_tester_full/rotated',
-    #                  output_dir='/Users/elinacertova/Downloads/dataset_tester_full/deskewed',
-    #                  failed_dir='/Users/elinacertova/Downloads/dataset_tester_full/failed')
-    # remove_lines(input_dir='/Users/elinacertova/Downloads/dataset_tester_full/deskewed',
-    #              lines_cleaned_folder='/Users/elinacertova/Downloads/dataset_tester_full/lines_cleaned',
-    #              no_lines_ok_folder='/Users/elinacertova/Downloads/dataset_tester_full/lines_not_detected',
-    #              combined_output_folder='/Users/elinacertova/Downloads/dataset_tester_full/combined')
-    # dark_documents_to_light(input_folder='/Users/elinacertova/Downloads/dataset_tester_full/combined',
-    #                         output_folder='/Users/elinacertova/Downloads/dataset_tester_full/lightened',
-    #                         dark_folder='/Users/elinacertova/Downloads/dataset_tester_full/dark',
-    #                         combined_output_folder='/Users/elinacertova/Downloads/dataset_tester_full/lightened_combined',
-    #                         lightening_method='bilateral_filter')
-    # enhance_contrast_documents(input_dir='/Users/elinacertova/Downloads/dataset_tester_full/lightened_combined',
-    #                            output_dir='/Users/elinacertova/Downloads/dataset_tester_full/contrast_enhanced')
-    # classify_by_quality(input_folder='/Users/elinacertova/Downloads/dataset_tester_full/contrast_enhanced',
-    #                     output_folder='/Users/elinacertova/Downloads/dataset_tester_full/classified')
-    
-    # process_single_document_fast(
-    #     input_pdf_path='/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf',
-    #     output_base_dir='/Users/elinacertova/Downloads/single_doc_test/output_optimized',
-    #     output_csv_path='/Users/elinacertova/Downloads/single_doc_test/results_optimized.csv',
-    #     dpi=250,
-    #     max_workers=4
+    # # input_pdf_path = '/Users/elinacertova/PycharmProjects/document-quality-classificator/data_example/Договор_купли_продажи_недвижимого_имущества_пример_2025_для_двух.pdf'
+    # input_pdf_path = '/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf'
+    # output_base_dir = '/Users/elinacertova/Downloads/single_doc_test/output2'
+    # output_csv_path = '/Users/elinacertova/Downloads/single_doc_test/results.csv'
+    # pages_dir = process_single_document(
+    # #     input_pdf_path='/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf',
+    #     input_pdf_path=input_pdf_path,
+    #     output_base_dir=output_base_dir,
+    #     output_csv_path=output_csv_path
     # )
-    # doc01753420250721150145_page_13
-    # Scan_20250213_120013
+    #
+    # document_name = Path(input_pdf_path).stem
+    #
+    # results = classify_single_document(
+    #     pages_dir=pages_dir,
+    #     document_name=document_name,
+    #     output_base_dir=output_base_dir,
+    #     output_csv_path=output_csv_path,
+    #     dpi=400,
+    #     max_workers=4,
+    #     classifier_dpi=300,
+    #     device="cpu",
+    #     optimized=False
+    # )
 
-    # input_pdf_path = '/Users/elinacertova/PycharmProjects/document-quality-classificator/data_example/Договор_купли_продажи_недвижимого_имущества_пример_2025_для_двух.pdf'
-    input_pdf_path = '/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf'
-    output_base_dir = '/Users/elinacertova/Downloads/single_doc_test/output2'
-    output_csv_path = '/Users/elinacertova/Downloads/single_doc_test/results.csv'
-    pages_dir = process_single_document(
-    #     input_pdf_path='/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf',
-        input_pdf_path=input_pdf_path,
-        output_base_dir=output_base_dir,
-        output_csv_path=output_csv_path
-    )
+    from src.pipeline.process_single_document_smart import process_single_document_smart
 
-    document_name = Path(input_pdf_path).stem
-
-    results = classify_single_document(
-        pages_dir=pages_dir,
-        document_name=document_name,
-        output_base_dir=output_base_dir,
-        output_csv_path=output_csv_path,
+    results = process_single_document_smart(
+        input_pdf_path="/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf",
+        output_base_dir="/Users/elinacertova/Downloads/single_doc_test/output3",
+        output_csv_path="results.csv",
         dpi=400,
         max_workers=4,
         classifier_dpi=300,
         device="cpu",
         optimized=False
     )
-    
-    # process_single_document_fastest(
-    #     input_pdf_path='/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf',
-    #     output_base_dir='/Users/elinacertova/Downloads/single_doc_test/output_fastest',
-    #     output_csv_path='/Users/elinacertova/Downloads/single_doc_test/results_fastest.csv',
+    # compare_binarization_ocr(
+    #     input_dir="/Users/elinacertova/Downloads/dataset_tester_full/deskewed",
+    #     output_dir="/Users/elinacertova/Downloads/testing_dir",
+    #     comparison_csv_path="/Users/elinacertova/Downloads/binarization_comparison.csv",
     #     dpi=300,
-    #     skip_deskew=False
+    #     method="adaptive_mean",
+    #     block_size=15,
+    #     c=10.0,
     # )
-    
-    # process_single_document_ultrafast(
-    #     input_pdf_path='/Users/elinacertova/Downloads/single_doc_test/Scan_20250213_120013.pdf',
-    #     output_base_dir='/Users/elinacertova/Downloads/single_doc_test/output_ultrafast',
-    #     output_csv_path='/Users/elinacertova/Downloads/single_doc_test/results_ultrafast.csv',
-    #     dpi=200
-    # )
-    
+    # compare_binarization_ocr(
+    #     input_dir="/Users/elinacertova/Downloads/dataset_tester_full/deskewed",
+    #     output_dir="/Users/elinacertova/Downloads/testing_dir",
+    #     comparison_csv_path="/Users/elinacertova/Downloads/binarization_comparison.csv",
+    #     dpi=300,
+    #     method="adaptive_mean",
+    #     block_size=15,
+    #     c=10.0,
+    #     device="cpu",  # или "cuda" если доступен GPU
+    #     optimized=False,
+    # ) https://api.honeypot.is/v2/IsHoneypot?address=0x9254d92d576a10d3dec2966a5a6ebbf493b65827&chainID=8453
     # compare_folder(
     #     original_dir='/Users/elinacertova/Downloads/single_doc_test/output_optimized/splitted',
     #     processed_dir='/Users/elinacertova/Downloads/single_doc_test/output_optimized/deskewed',
